@@ -1,0 +1,343 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  role          UserRole  @default(AGENT)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts    Account[]
+  sessions    Session[]
+  properties  Property[]
+  leads       Lead[]
+  clients     Client[]
+  appointments Appointment[]
+  messages    Message[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Property {
+  id                   String            @id @default(cuid())
+  title                String
+  titleAr              String?
+  description          String            @db.Text
+  descriptionAr        String?           @db.Text
+  referenceNumber      String?           @unique
+  category             PropertyCategory  @default(RESIDENTIAL)
+  type                 PropertyType
+  status               PropertyStatus    @default(AVAILABLE)
+  listingType          ListingType
+  price                Float
+  area                 Float
+  bedrooms             Int?
+  bathrooms            Int?
+  floor                Int?
+  totalFloors          Int?
+  furnishing           Furnishing?
+  availabilityType     AvailabilityType  @default(IMMEDIATE)
+  availableFrom        DateTime?
+  utilityBillsIncluded Boolean           @default(false)
+  address              String
+  district             String?
+  city                 String            @default("Doha")
+  coordinates          Json?
+  photos               String[]
+  amenities            String[]
+  featured             Boolean           @default(false)
+  views                Int               @default(0)
+  agentId              String
+  agent                User              @relation(fields: [agentId], references: [id])
+  leads                Lead[]
+  appointments         Appointment[]
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+}
+
+model Lead {
+  id            String       @id @default(cuid())
+  name          String
+  email         String?
+  phone         String
+  source        LeadSource   @default(WEBSITE)
+  status        LeadStatus   @default(NEW)
+  score         Int          @default(0)
+  budget        Float?
+  budgetMax     Float?
+  propertyType  PropertyType?
+  bedrooms      Int?
+  notes         String?      @db.Text
+  aiSummary     String?      @db.Text
+  lastContactAt DateTime?
+  agentId       String
+  agent         User         @relation(fields: [agentId], references: [id])
+  propertyId    String?
+  property      Property?    @relation(fields: [propertyId], references: [id])
+  clientId      String?
+  client        Client?      @relation(fields: [clientId], references: [id])
+  appointments      Appointment[]
+  followUps         FollowUp[]
+  whatsAppConversation WhatsAppConversation?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+}
+
+model Client {
+  id                String    @id @default(cuid())
+  name              String
+  email             String?
+  phone             String
+  nationality       String?
+  idNumber          String?
+  notes             String?   @db.Text
+  // Contract / lease tracking
+  contractStart     DateTime?
+  contractEnd       DateTime?
+  contractNotes     String?
+  renewalSentAt     DateTime?
+  agentId           String
+  agent             User      @relation(fields: [agentId], references: [id])
+  leads             Lead[]
+  documents         Document[]
+  appointments      Appointment[]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model Appointment {
+  id          String            @id @default(cuid())
+  title       String
+  description String?
+  startTime   DateTime
+  endTime     DateTime
+  type        AppointmentType   @default(VIEWING)
+  status      AppointmentStatus @default(SCHEDULED)
+  location    String?
+  notes       String?
+  agentId     String
+  agent       User              @relation(fields: [agentId], references: [id])
+  leadId      String?
+  lead        Lead?             @relation(fields: [leadId], references: [id])
+  clientId    String?
+  client      Client?           @relation(fields: [clientId], references: [id])
+  propertyId  String?
+  property    Property?         @relation(fields: [propertyId], references: [id])
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+model FollowUp {
+  id          String         @id @default(cuid())
+  leadId      String
+  lead        Lead           @relation(fields: [leadId], references: [id])
+  type        FollowUpType
+  content     String         @db.Text
+  scheduledAt DateTime
+  sentAt      DateTime?
+  status      FollowUpStatus @default(PENDING)
+  createdAt   DateTime       @default(now())
+}
+
+model Document {
+  id          String         @id @default(cuid())
+  title       String
+  type        DocumentType
+  status      DocumentStatus @default(DRAFT)
+  content     String?        @db.Text
+  fileUrl     String?
+  signedAt    DateTime?
+  clientId    String
+  client      Client         @relation(fields: [clientId], references: [id])
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  role      String
+  content   String   @db.Text
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model WhatsAppConversation {
+  id        String               @id @default(cuid())
+  phone     String               @unique
+  name      String?
+  leadId    String?              @unique
+  lead      Lead?                @relation(fields: [leadId], references: [id])
+  messages  WhatsAppMessage[]
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+}
+
+model WhatsAppMessage {
+  id             String               @id @default(cuid())
+  conversationId String
+  conversation   WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  content        String               @db.Text
+  createdAt      DateTime             @default(now())
+}
+
+enum UserRole {
+  ADMIN
+  AGENT
+}
+
+enum PropertyCategory {
+  RESIDENTIAL
+  COMMERCIAL
+}
+
+enum Furnishing {
+  FURNISHED
+  SEMI_FURNISHED
+  UNFURNISHED
+}
+
+enum AvailabilityType {
+  IMMEDIATE
+  DATE
+}
+
+enum PropertyType {
+  APARTMENT
+  COMPOUND
+  COWORKING
+  DUPLEX
+  INDUSTRIAL_LAND
+  LABOR_CAMP
+  LAND
+  OFFICE
+  PENTHOUSE
+  RESTAURANT
+  SHOP
+  SHOWROOM
+  STUDIO
+  TOWNHOUSE
+  VILLA
+  WAREHOUSE
+  WHOLE_BUILDING
+}
+
+enum PropertyStatus {
+  AVAILABLE
+  RENTED
+  SOLD
+  RESERVED
+  OFF_MARKET
+}
+
+enum ListingType {
+  RENT
+  SALE
+}
+
+enum LeadSource {
+  WEBSITE
+  PHONE
+  REFERRAL
+  SOCIAL_MEDIA
+  PROPERTY_FINDER
+  BAYUT
+  WALK_IN
+  OTHER
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  VIEWING_SCHEDULED
+  NEGOTIATING
+  CONVERTED
+  LOST
+}
+
+enum AppointmentType {
+  VIEWING
+  MEETING
+  CALL
+  FOLLOW_UP
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum FollowUpType {
+  EMAIL
+  SMS
+  WHATSAPP
+  CALL
+}
+
+enum FollowUpStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum DocumentType {
+  CONTRACT
+  LEASE
+  MOU
+  OFFER_LETTER
+  ID_COPY
+  OTHER
+}
+
+enum DocumentStatus {
+  DRAFT
+  SENT
+  SIGNED
+  EXPIRED
+}
