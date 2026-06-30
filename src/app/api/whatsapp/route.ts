@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     const propertyList = properties
       .map(
         (p) =>
-          `- ${p.title} | ${p.type}${p.bedrooms != null ? " " + p.bedrooms + "BR" : ""} | ${p.area}sqm | ${p.district || p.city} | QAR ${p.price.toLocaleString()} ${p.listingType === "RENT" ? "/year" : "for sale"}${p.furnishing ? " | " + p.furnishing : ""}${p.utilityBillsIncluded ? " | utilities included" : ""}`,
+          `- ${p.title} | ${p.type}${p.bedrooms != null ? " " + p.bedrooms + "BR" : ""} | ${p.area}sqm | ${p.district || p.city} | QAR ${p.price.toLocaleString()} ${p.listingType === "RENT" ? "/month" : "for sale"}${p.furnishing ? " | " + p.furnishing : ""}${p.utilityBillsIncluded ? " | utilities included" : ""}`,
       )
       .join("\n")
 
@@ -79,7 +79,7 @@ INSTRUCTIONS:
 - Help the visitor find properties matching their needs
 - Keep replies short and conversational (this is WhatsApp, not email)
 - Mention property details and prices in QAR
-- Rent prices are annual (per year)
+- Rent prices are monthly (per month)
 - When the visitor provides their name AND phone number, use the save_lead tool
 - After saving, confirm warmly that an agent will call them soon
 - Reply in the visitor's language (English or Arabic)
@@ -134,7 +134,7 @@ INSTRUCTIONS:
               name: input.name.trim(),
               phone: input.phone.trim(),
               email: input.email?.trim() || null,
-              source: "WEBSITE",
+              source: "WHATSAPP",
               notes: `WhatsApp inquiry from ${from}. ${input.notes || ""}`.trim(),
               agentId: agent.id,
             },

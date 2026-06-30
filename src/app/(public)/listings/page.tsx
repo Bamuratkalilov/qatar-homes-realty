@@ -166,7 +166,7 @@ function PropertyRow({
         <p className="text-[14px] font-bold text-blue-600">
           {formatPrice(p.price)}
         </p>
-        {isRent && <p className="text-[10px] text-slate-400">per year</p>}
+        {isRent && <p className="text-[10px] text-slate-400">per month</p>}
       </div>
       <ArrowRight className="w-4 h-4 text-slate-300 flex-shrink-0 group-hover:text-blue-500 transition-colors" />
     </Link>

@@ -1,10 +1,23 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 
+function parseBudgetRange(str: string): { budget: number | null; budgetMax: number | null } {
+  if (!str) return { budget: null, budgetMax: null }
+  const monthly = str.includes("/mo")
+  const mul = monthly ? 12 : 1
+  const nums = str.replace(/,/g, "").match(/\d+/g)?.map(Number) ?? []
+  if (!nums.length) return { budget: null, budgetMax: null }
+  if (nums.length === 1)
+    return str.toLowerCase().includes("under")
+      ? { budget: null, budgetMax: nums[0] * mul }
+      : { budget: nums[0] * mul, budgetMax: null }
+  return { budget: nums[0] * mul, budgetMax: nums[1] * mul }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { name, phone, email, message, propertyId } = body
+    const { name, phone, email, message, propertyId, source, propertyType, listingType, bedrooms, budget } = body
 
     if (!name?.trim() || !phone?.trim()) {
       return NextResponse.json({ error: "Name and phone are required" }, { status: 400 })
@@ -36,9 +49,11 @@ export async function POST(req: NextRequest) {
         name: name.trim(),
         phone: phone.trim(),
         email: email?.trim() || null,
-        source: "WEBSITE",
+        source: source || "WEBSITE",
         notes: message?.trim() || null,
-        propertyType: property?.type || null,
+        propertyType: propertyType || property?.type || null,
+        bedrooms: bedrooms !== undefined && bedrooms !== null ? Number(bedrooms) : null,
+        ...parseBudgetRange(budget || ""),
         propertyId: property?.id || null,
         agentId,
       },

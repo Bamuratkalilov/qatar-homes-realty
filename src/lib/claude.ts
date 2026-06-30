@@ -95,7 +95,7 @@ Bedrooms: ${property.bedrooms || "N/A"}
 Bathrooms: ${property.bathrooms || "N/A"}
 Area: ${property.area} sqm
 District: ${property.district || "Doha"}, Qatar
-Price: QAR ${property.price.toLocaleString()} ${property.listingType === "RENT" ? "per year" : ""}
+Price: QAR ${property.price.toLocaleString()} ${property.listingType === "RENT" ? "per month" : ""}
 Amenities: ${property.amenities?.join(", ") || "Standard"}
 
 Write a 3-paragraph description that is professional, highlights key features, and appeals to expats and locals in Qatar. Make it SEO-friendly.`,

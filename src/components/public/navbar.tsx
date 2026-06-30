@@ -42,6 +42,10 @@ const NAV_ITEMS = [
     ],
   },
   {
+    label: "Discover Qatar",
+    href: "/discover",
+  },
+  {
     label: "News",
     href: "/news",
   },

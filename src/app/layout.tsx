@@ -4,6 +4,12 @@ import "./globals.css"
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist-sans" })
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+}
+
 export const metadata: Metadata = {
   title: "Qatar Homes Realty — Find Property in Qatar",
   description: "Discover premium residential properties for rent and sale across Doha, Lusail, The Pearl, and Qatar. Expert agents, RERA compliant.",

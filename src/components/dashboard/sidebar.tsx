@@ -6,7 +6,7 @@ import { signOut, useSession } from "next-auth/react"
 import { cn, getInitials } from "@/lib/utils"
 import {
   Building2, LayoutDashboard, Home, Users, UserCheck,
-  Calendar, FileText, TrendingUp, Bot, Settings, LogOut, ChevronRight, Shield, BarChart2, MessageCircle
+  Calendar, FileText, TrendingUp, Bot, Settings, LogOut, ChevronRight, Shield, BarChart2, MessageCircle, Camera, Newspaper
 } from "lucide-react"
 
 const agentNav = [
@@ -18,6 +18,8 @@ const agentNav = [
   { label: "Documents",   href: "/dashboard/documents",  icon: FileText        },
   { label: "Reports",     href: "/dashboard/reports",    icon: BarChart2       },
   { label: "Marketing",   href: "/dashboard/marketing",  icon: TrendingUp      },
+  { label: "Articles",    href: "/dashboard/articles",   icon: Newspaper       },
+  { label: "Instagram",   href: "/dashboard/instagram",  icon: Camera          },
   { label: "WhatsApp AI", href: "/dashboard/whatsapp",   icon: MessageCircle   },
   { label: "AI Assistant",href: "/dashboard/assistant",  icon: Bot             },
   { label: "Settings",    href: "/dashboard/settings",   icon: Settings        },

@@ -4,6 +4,13 @@ import { formatPrice, formatArea } from "@/lib/utils"
 import { MapPin, Bed, Bath, Maximize, Share2, CheckCircle, Building2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { InquiryForm } from "@/components/public/inquiry-form"
+import { PhotoGallery } from "@/components/public/photo-gallery"
+import { ExpandableText } from "@/components/public/expandable-text"
+import { FavouriteButton } from "@/components/public/favourite-button"
+import { ViewsCounter } from "@/components/public/views-counter"
+import { Neighbourhood } from "@/components/public/neighbourhood"
+import { WeatherSection } from "@/components/public/weather-section"
+import { SimilarProperties } from "@/components/public/similar-properties"
 
 export default async function PropertyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -23,6 +30,33 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
 
   if (!property && id !== "demo") notFound()
 
+  // Fetch similar properties
+  let similar: Array<{
+    id: string; title: string; type: string; listingType: string; status: string;
+    price: number; area: number; bedrooms: number | null; bathrooms: number | null;
+    address: string; district: string | null; city: string; photos: string[]; featured: boolean;
+  }> = []
+  if (property) {
+    try {
+      similar = await db.property.findMany({
+        where: {
+          id:          { not: property.id },
+          listingType: property.listingType,
+          city:        property.city,
+          status:      "AVAILABLE",
+          price:       { gte: property.price * 0.6, lte: property.price * 1.4 },
+        },
+        select: {
+          id: true, title: true, type: true, listingType: true, status: true,
+          price: true, area: true, bedrooms: true, bathrooms: true,
+          address: true, district: true, city: true, photos: true, featured: true,
+        },
+        orderBy: { views: "desc" },
+        take: 6,
+      })
+    } catch { /* ignore */ }
+  }
+
   const p = property || {
     id: "demo", title: "Luxury 3BR Apartment in The Pearl", type: "APARTMENT",
     listingType: "RENT", status: "AVAILABLE", price: 180000, area: 185,
@@ -34,7 +68,7 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
     ],
     description: "Stunning luxury apartment located in the prestigious Pearl-Qatar development. This beautifully furnished 3-bedroom unit offers panoramic sea views from the 8th floor. Features an open-plan kitchen with premium appliances, spacious living and dining areas, and three en-suite bathrooms. The building offers world-class amenities including a pool, gym, and 24-hour concierge service.",
     amenities: ["Pool", "Gym", "Parking", "Concierge", "Sea View", "Furnished", "Central AC", "Balcony"],
-    featured: true, views: 42,
+    featured: true, views: 42, favorites: 0, coordinates: null,
     agent: { name: "Ahmad Al-Mansoori", email: "ahmad@qatarhomes.com", image: null },
   }
 
@@ -42,24 +76,18 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
   const isRent = p.listingType === "RENT"
 
   return (
+    <div>
+      {/* Full-width photo gallery */}
+      {photos.length > 0
+        ? <PhotoGallery photos={photos} title={p.title} />
+        : <div className="h-80 bg-slate-100 flex items-center justify-center text-slate-400"><Building2 className="w-16 h-16" /></div>
+      }
+
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Content */}
         <div className="lg:col-span-2">
-          {/* Photo Gallery */}
-          <div className="rounded-2xl overflow-hidden bg-slate-100 mb-6">
-            {photos[0] ? (
-              <div className="grid grid-cols-2 gap-1 h-80 sm:h-96">
-                <img src={photos[0]} alt={p.title} className="w-full h-full object-cover col-span-2 sm:col-span-1 row-span-2" />
-                {photos[1] && <img src={photos[1]} alt="" className="w-full h-full object-cover hidden sm:block" />}
-                {photos[2] && <img src={photos[2]} alt="" className="w-full h-full object-cover hidden sm:block" />}
-              </div>
-            ) : (
-              <div className="h-80 flex items-center justify-center text-slate-400">
-                <Building2 className="w-16 h-16" />
-              </div>
-            )}
-          </div>
+          {/* gallery placeholder — moved above */}
 
           {/* Title & Badges */}
           <div className="flex items-start justify-between gap-4 mb-4">
@@ -73,6 +101,10 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
                 <MapPin className="w-4 h-4" />
                 {p.address}
               </p>
+              <div className="flex items-center gap-4 mt-2">
+                <ViewsCounter propertyId={p.id} initialCount={p.views as number} />
+                <FavouriteButton propertyId={p.id} initialCount={(p.favorites as number) ?? 0} />
+              </div>
             </div>
             <button className="p-2.5 border border-slate-200 rounded-xl text-slate-400 hover:text-slate-700 transition flex-shrink-0">
               <Share2 className="w-5 h-5" />
@@ -82,7 +114,7 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
           {/* Price */}
           <div className="mb-6">
             <span className="text-3xl font-bold text-blue-600">{formatPrice(p.price)}</span>
-            {isRent && <span className="text-slate-400 ml-1">/year</span>}
+            {isRent && <span className="text-slate-400 ml-1">/month</span>}
           </div>
 
           {/* Key Details */}
@@ -118,12 +150,12 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
           {/* Description */}
           <div className="mb-6">
             <h2 className="text-lg font-semibold text-slate-900 mb-3">About this property</h2>
-            <p className="text-slate-600 leading-relaxed whitespace-pre-line">{p.description}</p>
+            <ExpandableText text={p.description as string} />
           </div>
 
           {/* Amenities */}
           {(p.amenities as string[])?.length > 0 && (
-            <div>
+            <div className="mb-8">
               <h2 className="text-lg font-semibold text-slate-900 mb-3">Amenities & Features</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {(p.amenities as string[]).map((a) => (
@@ -135,6 +167,15 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
               </div>
             </div>
           )}
+
+          {/* Map & Neighbourhood */}
+          <Neighbourhood
+            propertyId={p.id}
+            address={p.address}
+            district={p.district as string | null}
+            city={p.city}
+            coordinates={((p as { coordinates?: unknown }).coordinates as { lat: number; lng: number }) ?? null}
+          />
         </div>
 
         {/* Sidebar: Agent + Contact */}
@@ -161,6 +202,10 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
           </div>
         </div>
       </div>
+
+      {/* Similar Properties */}
+      <SimilarProperties properties={similar} />
+    </div>
     </div>
   )
 }

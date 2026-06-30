@@ -27,6 +27,9 @@ export default function NewPropertyPage() {
   const [loading, setLoading] = useState<"draft" | "publish" | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
+  const [postToInstagram, setPostToInstagram] = useState(false)
+  const [igStatus, setIgStatus] = useState<"idle" | "posting" | "done" | "error">("idle")
+  const [igError, setIgError] = useState<string | null>(null)
 
   const [form, setForm] = useState({
     title: "",
@@ -61,7 +64,19 @@ export default function NewPropertyPage() {
 
   // Generate reference number client-side only (avoids hydration mismatch)
   useEffect(() => {
-    localStorage.removeItem(DRAFT_KEY) // always start fresh
+    const saved = localStorage.getItem(DRAFT_KEY)
+    if (saved) {
+      try {
+        const draft = JSON.parse(saved)
+        if (draft.form) setForm({ ...draft.form, referenceNumber: generateRef() })
+        if (draft.amenities) setAmenities(draft.amenities)
+        if (draft.utilities) setUtilities(draft.utilities)
+        if (draft.photos) setPhotos(draft.photos)
+        if (draft.coordinates) setCoordinates(draft.coordinates)
+        return
+      } catch { /* fall through */ }
+    }
+    localStorage.removeItem(DRAFT_KEY)
     setForm((f) => ({ ...f, referenceNumber: generateRef() }))
   }, [])
 
@@ -185,7 +200,25 @@ export default function NewPropertyPage() {
       const data = await res.json()
       if (res.ok) {
         clearDraft()
-        router.push("/dashboard/properties")
+        // Post to Instagram if toggled and publishing (not draft)
+        if (status === "AVAILABLE" && postToInstagram) {
+          setIgStatus("posting")
+          try {
+            const igRes = await fetch("/api/instagram", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ property: data.property }),
+            })
+            const igData = await igRes.json()
+            if (!igRes.ok) { setIgStatus("error"); setIgError(igData.error || "Instagram post failed") }
+            else setIgStatus("done")
+          } catch {
+            setIgStatus("error"); setIgError("Could not reach Instagram")
+          }
+          setTimeout(() => router.push("/dashboard/properties"), 2000)
+        } else {
+          router.push("/dashboard/properties")
+        }
       } else {
         setError(data.error || "Something went wrong. Please try again.")
       }
@@ -538,6 +571,38 @@ export default function NewPropertyPage() {
 
               {/* Bottom action bar */}
               <div className="pb-10">
+                {/* Instagram toggle */}
+                <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-100 rounded-xl p-4 mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">📸</span>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">Post to Instagram</p>
+                      <p className="text-xs text-slate-500">AI writes the caption + hashtags automatically</p>
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => setPostToInstagram(v => !v)}
+                    className={cn("w-11 h-6 rounded-full transition-all relative flex-shrink-0", postToInstagram ? "bg-purple-600" : "bg-slate-200")}>
+                    <div className={cn("w-5 h-5 rounded-full bg-white shadow absolute top-0.5 transition-all", postToInstagram ? "left-[22px]" : "left-0.5")} />
+                  </button>
+                </div>
+
+                {/* Status messages */}
+                {igStatus === "posting" && (
+                  <div className="bg-purple-50 border border-purple-100 rounded-xl px-4 py-3 mb-3 text-sm text-purple-700 flex items-center gap-2">
+                    <span className="animate-spin">⏳</span> Posting to Instagram…
+                  </div>
+                )}
+                {igStatus === "done" && (
+                  <div className="bg-green-50 border border-green-100 rounded-xl px-4 py-3 mb-3 text-sm text-green-700">
+                    ✅ Posted to Instagram successfully!
+                  </div>
+                )}
+                {igStatus === "error" && (
+                  <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 mb-3 text-sm text-red-700">
+                    ⚠️ {igError || "Instagram post failed"} — listing was still published.
+                  </div>
+                )}
+
                 <div className="bg-white rounded-xl border border-slate-200 p-4 flex items-center justify-between gap-4">
                   <div className="text-xs text-slate-500 space-y-0.5">
                     <p className="font-semibold text-slate-700">Ready to go?</p>
@@ -554,7 +619,7 @@ export default function NewPropertyPage() {
                     </Button>
                     <Button type="button" disabled={loading !== null} onClick={() => submit("AVAILABLE")} className="gap-2 bg-green-600 hover:bg-green-700">
                       <Globe className="w-4 h-4" />
-                      {loading === "publish" ? "Publishing…" : "Publish Listing"}
+                      {loading === "publish" ? "Publishing…" : postToInstagram ? "Publish + Post 📸" : "Publish Listing"}
                     </Button>
                   </div>
                 </div>

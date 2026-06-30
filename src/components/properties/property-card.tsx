@@ -1,8 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
-import { MapPin, Bed, Bath, Maximize, Heart, Camera, Star } from "lucide-react"
+import { useState, useRef } from "react"
+import { MapPin, Bed, Bath, Maximize, Heart, Camera, Star, ChevronLeft, ChevronRight } from "lucide-react"
 import { formatPrice, formatArea } from "@/lib/utils"
 import { cn } from "@/lib/utils"
 
@@ -35,17 +35,43 @@ const TYPE_LABELS: Record<string, string> = {
 export function PropertyCard({ property }: PropertyCardProps) {
   const [liked,   setLiked]   = useState(false)
   const [imgIdx,  setImgIdx]  = useState(0)
+  const touchStartX = useRef<number | null>(null)
   const photos  = property.photos.length > 0
     ? property.photos
     : ["https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800"]
   const isRent  = property.listingType === "RENT"
   const monthly = isRent ? Math.round(property.price / 12) : null
 
+  function prev(e: React.MouseEvent) {
+    e.preventDefault(); e.stopPropagation()
+    setImgIdx((i) => (i - 1 + photos.length) % photos.length)
+  }
+  function next(e: React.MouseEvent) {
+    e.preventDefault(); e.stopPropagation()
+    setImgIdx((i) => (i + 1) % photos.length)
+  }
+  function onTouchStart(e: React.TouchEvent) {
+    touchStartX.current = e.touches[0].clientX
+  }
+  function onTouchEnd(e: React.TouchEvent) {
+    if (touchStartX.current === null) return
+    const diff = touchStartX.current - e.changedTouches[0].clientX
+    if (Math.abs(diff) > 40) {
+      if (diff > 0) setImgIdx((i) => (i + 1) % photos.length)
+      else setImgIdx((i) => (i - 1 + photos.length) % photos.length)
+    }
+    touchStartX.current = null
+  }
+
   return (
     <div className="group bg-white rounded-2xl overflow-hidden border border-slate-200 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200">
 
       {/* Image */}
-      <div className="relative aspect-[16/10] overflow-hidden bg-slate-100">
+      <div
+        className="relative aspect-[16/10] overflow-hidden bg-slate-100"
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      >
         <Link href={`/listings/${property.id}`}>
           <img
             src={photos[imgIdx]}
@@ -53,6 +79,20 @@ export function PropertyCard({ property }: PropertyCardProps) {
             className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500"
           />
         </Link>
+
+        {/* Prev / Next arrows */}
+        {photos.length > 1 && (
+          <>
+            <button onClick={prev}
+              className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button onClick={next}
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </>
+        )}
 
         {/* Top badges */}
         <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">

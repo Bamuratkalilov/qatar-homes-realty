@@ -46,6 +46,7 @@ const PIPELINE_STAGES = [
 
 const SOURCE_ICONS: Record<string, string> = {
   WEBSITE: "🌐", PHONE: "📞", REFERRAL: "🤝", SOCIAL_MEDIA: "📱",
+  TIKTOK: "🎵", WHATSAPP: "💬",
   PROPERTY_FINDER: "🔍", BAYUT: "🏠", WALK_IN: "🚶", OTHER: "💼",
 }
 
@@ -258,6 +259,11 @@ function LeadCard({ lead, onClick, onStatusChange, onQualify, qualifying }: {
         </div>
       </div>
 
+      {/* Notes preview */}
+      {lead.notes && (
+        <p className="text-xs text-slate-500 mt-2 line-clamp-2 leading-relaxed">{lead.notes}</p>
+      )}
+
       {/* Bottom row */}
       <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
         <div className="flex items-center gap-3 text-xs text-slate-500">
@@ -272,6 +278,11 @@ function LeadCard({ lead, onClick, onStatusChange, onQualify, qualifying }: {
               {lead.propertyType}
             </span>
           )}
+          {lead.bedrooms ? (
+            <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full text-[11px] font-medium">
+              {lead.bedrooms === 0 ? "Studio" : `${lead.bedrooms} BR`}
+            </span>
+          ) : null}
         </div>
 
         {/* Quick actions */}
@@ -301,110 +312,124 @@ function LeadCard({ lead, onClick, onStatusChange, onQualify, qualifying }: {
 }
 
 // ── Lead Row (Table list view) ────────────────────────────────────────────────
+function extractLocation(notes: string): string {
+  const m = notes?.match(/\bin ([^,|]+?)(?:\s*,|\s*\||\s*budget:|$)/i)
+  return m?.[1]?.trim() || ""
+}
+
+function extractClientNotes(notes: string): string {
+  if (!notes) return ""
+  const idx = notes.indexOf("| Notes: ")
+  return idx !== -1 ? notes.slice(idx + 9).trim() : ""
+}
+
 function LeadRow({ lead, onClick, onStatusChange, onQualify, qualifying }: {
   lead: Lead; onClick: (e: React.MouseEvent) => void
   onStatusChange: (id: string, status: string) => void
   onQualify: (id: string) => void
   qualifying: string | null
 }) {
-  const stage = stageOf(lead.status)
-  const sc = scoreColor(lead.score)
   const nextStage = PIPELINE_STAGES[PIPELINE_STAGES.findIndex((s) => s.key === lead.status) + 1]
+  const location = extractLocation(lead.notes || "")
+  const clientNotes = extractClientNotes(lead.notes || "")
 
   return (
     <tr onClick={onClick} className="group cursor-pointer hover:bg-blue-50/40 transition-colors border-b border-slate-100 last:border-0">
-      {/* Name + avatar */}
-      <td className="pl-4 pr-3 py-3">
+
+      {/* Name */}
+      <td className="pl-4 pr-3 py-3 whitespace-nowrap">
         <div className="flex items-center gap-3">
           <ScoreRing name={lead.name} score={lead.score} size={34} />
           <div className="min-w-0">
             <p className="text-sm font-semibold text-slate-900 truncate max-w-[140px]">{lead.name}</p>
             <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
               <span>{SOURCE_ICONS[lead.source]}</span>
-              <span className="truncate max-w-[100px]">{lead.source.replace(/_/g, " ")}</span>
+              <span>{lead.source.replace(/_/g, " ")}</span>
             </p>
           </div>
         </div>
       </td>
 
       {/* Contact */}
-      <td className="px-3 py-3">
-        <a href={`tel:${lead.phone}`} onClick={(e) => e.stopPropagation()} className="text-xs text-blue-600 hover:underline flex items-center gap-1 whitespace-nowrap">
+      <td className="px-3 py-3 whitespace-nowrap">
+        <a href={`tel:${lead.phone}`} onClick={(e) => e.stopPropagation()}
+          className="text-xs text-blue-600 hover:underline flex items-center gap-1">
           <Phone className="w-3 h-3 flex-shrink-0" /> {lead.phone}
         </a>
-        {lead.email && (
-          <a href={`mailto:${lead.email}`} onClick={(e) => e.stopPropagation()} className="text-[11px] text-slate-400 hover:text-blue-500 truncate max-w-[160px] flex items-center gap-1 mt-0.5">
-            <Mail className="w-3 h-3 flex-shrink-0" /> {lead.email}
-          </a>
-        )}
+        <a href={`https://wa.me/${lead.phone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="text-[11px] text-green-600 hover:underline flex items-center gap-1 mt-0.5">
+          <MessageSquare className="w-3 h-3 flex-shrink-0" /> WhatsApp
+        </a>
       </td>
 
-      {/* Reference (linked property) */}
+      {/* Reference */}
       <td className="px-3 py-3">
         {lead.property ? (
-          <div className="flex items-center gap-2 min-w-0 max-w-[180px]">
-            <div className="w-9 h-9 rounded-lg flex-shrink-0 overflow-hidden bg-slate-100 border border-slate-200">
+          <div className="flex items-center gap-2 min-w-0 max-w-[160px]">
+            <div className="w-8 h-8 rounded-lg flex-shrink-0 overflow-hidden bg-slate-100 border border-slate-200">
               {lead.property.photos?.[0]
                 ? <img src={lead.property.photos[0]} alt="" className="w-full h-full object-cover" />
-                : <Home className="w-4 h-4 text-slate-400 m-2.5" />}
+                : <Home className="w-3.5 h-3.5 text-slate-400 m-2" />}
             </div>
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold text-slate-700 truncate leading-tight">{lead.property.title}</p>
+              <p className="text-[11px] font-semibold text-slate-700 truncate">{lead.property.title}</p>
               {lead.property.referenceNumber && (
-                <p className="text-[10px] font-mono text-slate-400 leading-tight">{lead.property.referenceNumber}</p>
+                <p className="text-[10px] font-mono text-slate-400">{lead.property.referenceNumber}</p>
               )}
             </div>
           </div>
-        ) : (
-          <span className="text-slate-300 text-xs">—</span>
-        )}
+        ) : <span className="text-slate-300 text-xs">—</span>}
       </td>
 
-      {/* Stage */}
-      <td className="px-3 py-3">
-        <span className={cn("text-[11px] font-semibold px-2.5 py-1 rounded-full border whitespace-nowrap", stage.light, stage.text)}>
-          {stage.label}
-        </span>
-      </td>
-
-      {/* Score */}
-      <td className="px-3 py-3 text-center">
-        {lead.score > 0 ? (
-          <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full", sc.bg, sc.text)}>
-            {lead.score}
-          </span>
-        ) : (
-          <span className="text-slate-300 text-xs">—</span>
-        )}
+      {/* Property Type */}
+      <td className="px-3 py-3 whitespace-nowrap">
+        {lead.propertyType ? (
+          <div className="flex items-center gap-1.5">
+            <span className="bg-slate-100 text-slate-700 px-2 py-1 rounded-lg text-xs font-medium">
+              {lead.propertyType}
+            </span>
+            {lead.bedrooms != null && (
+              <span className="bg-blue-50 text-blue-600 px-2 py-1 rounded-lg text-xs font-medium">
+                {lead.bedrooms === 0 ? "Studio" : `${lead.bedrooms} BR`}
+              </span>
+            )}
+          </div>
+        ) : <span className="text-slate-300 text-xs">—</span>}
       </td>
 
       {/* Budget */}
-      <td className="px-3 py-3">
-        {lead.budget ? (
-          <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">
-            {formatPrice(lead.budget)}{lead.budgetMax ? "+" : ""}
+      <td className="px-3 py-3 whitespace-nowrap">
+        {lead.budget || lead.budgetMax ? (
+          <span className="text-xs font-semibold text-slate-700">
+            {lead.budget && lead.budgetMax
+              ? `${formatPrice(lead.budget)} – ${formatPrice(lead.budgetMax)}`
+              : lead.budget
+              ? `${formatPrice(lead.budget)}+`
+              : `Under ${formatPrice(lead.budgetMax!)}`}
           </span>
-        ) : (
-          <span className="text-slate-300 text-xs">—</span>
-        )}
+        ) : <span className="text-slate-300 text-xs">—</span>}
       </td>
 
-      {/* Added */}
-      <td className="px-3 py-3 text-[11px] text-slate-400 whitespace-nowrap">
-        {relativeTime(lead.createdAt)}
+      {/* Location */}
+      <td className="px-3 py-3 whitespace-nowrap">
+        {location ? (
+          <span className="text-sm text-slate-700 font-medium">{location}</span>
+        ) : <span className="text-slate-300 text-xs">—</span>}
+      </td>
+
+      {/* Notes */}
+      <td className="px-3 py-3 max-w-[200px]">
+        {clientNotes ? (
+          <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">{clientNotes}</p>
+        ) : lead.notes ? (
+          <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed italic">{lead.notes}</p>
+        ) : <span className="text-slate-300 text-xs">—</span>}
       </td>
 
       {/* Actions */}
       <td className="pl-3 pr-4 py-3">
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-          <a href={`https://wa.me/${lead.phone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer"
-            className="w-7 h-7 rounded-lg bg-green-50 hover:bg-green-100 text-green-600 flex items-center justify-center transition-colors" title="WhatsApp">
-            <MessageSquare className="w-3.5 h-3.5" />
-          </a>
-          <a href={`tel:${lead.phone}`}
-            className="w-7 h-7 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 flex items-center justify-center transition-colors" title="Call">
-            <PhoneCall className="w-3.5 h-3.5" />
-          </a>
           <button onClick={() => onQualify(lead.id)} disabled={qualifying === lead.id}
             className="w-7 h-7 rounded-lg bg-violet-50 hover:bg-violet-100 text-violet-600 flex items-center justify-center transition-colors" title="AI Qualify">
             {qualifying === lead.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
@@ -862,7 +887,7 @@ export default function LeadsPage() {
   const [showForm, setShowForm] = useState(false)
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
   const [qualifying, setQualifying] = useState<string | null>(null)
-  const [view, setView] = useState<"cards" | "list" | "kanban">("cards")
+  const [view, setView] = useState<"cards" | "list" | "kanban">("list")
   const [popup, setPopup] = useState<{ lead: Lead; x: number; y: number } | null>(null)
   const [search, setSearch] = useState("")
   const [filterStatus, setFilterStatus] = useState("")
@@ -1126,17 +1151,17 @@ export default function LeadsPage() {
                     <p className="font-medium">No leads match your search</p>
                   </div>
                 ) : (
-                  <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-                    <table className="w-full">
+                  <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden overflow-x-auto">
+                    <table className="w-full" style={{ minWidth: 900 }}>
                       <thead>
                         <tr className="border-b border-slate-100 bg-slate-50">
-                          <th className="pl-4 pr-3 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Lead</th>
+                          <th className="pl-4 pr-3 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Name</th>
                           <th className="px-3 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Contact</th>
                           <th className="px-3 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Reference</th>
-                          <th className="px-3 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Stage</th>
-                          <th className="px-3 py-3 text-center text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Score</th>
+                          <th className="px-3 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Property Type</th>
                           <th className="px-3 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Budget</th>
-                          <th className="px-3 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Added</th>
+                          <th className="px-3 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Location</th>
+                          <th className="px-3 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Notes</th>
                           <th className="pl-3 pr-4 py-3 text-right text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Actions</th>
                         </tr>
                       </thead>

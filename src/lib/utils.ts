@@ -86,6 +86,8 @@ export const LEAD_SOURCES = [
   { value: "PHONE", label: "Phone Call" },
   { value: "REFERRAL", label: "Referral" },
   { value: "SOCIAL_MEDIA", label: "Social Media" },
+  { value: "TIKTOK", label: "TikTok" },
+  { value: "WHATSAPP", label: "WhatsApp" },
   { value: "PROPERTY_FINDER", label: "Property Finder" },
   { value: "BAYUT", label: "Bayut" },
   { value: "WALK_IN", label: "Walk-in" },

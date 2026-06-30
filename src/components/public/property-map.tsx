@@ -104,7 +104,7 @@ export function PropertyMap({ properties, fullscreen = false }: Props) {
             ${photo ? `<img src="${photo}" style="width:100%;height:130px;object-fit:cover;border-radius:10px 10px 0 0;display:block;" />` : ""}
             <div style="padding:12px;">
               <div style="font-size:16px;font-weight:800;color:#1d4ed8;margin-bottom:4px;">
-                ${formatPrice(p.price)}${isRent ? "<span style='font-size:11px;color:#64748b;font-weight:500'>/yr</span>" : ""}
+                ${formatPrice(p.price)}${isRent ? "<span style='font-size:11px;color:#64748b;font-weight:500'>/mo</span>" : ""}
               </div>
               <div style="font-size:12px;color:#1e293b;font-weight:600;margin-bottom:6px;line-height:1.3">${p.title}</div>
               <div style="font-size:11px;color:#64748b;display:flex;gap:10px;margin-bottom:10px;">

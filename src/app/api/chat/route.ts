@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     const propertyList = properties
       .map(
         (p) =>
-          `ID:${p.id} | ${p.title} | ${p.type}${p.bedrooms != null ? " " + p.bedrooms + "BR" : ""} | ${p.area}sqm | ${p.district || p.city} | QAR ${p.price.toLocaleString()} ${p.listingType === "RENT" ? "/year" : "for sale"}${p.furnishing ? " | " + p.furnishing : ""}${p.utilityBillsIncluded ? " | utilities included" : ""}`,
+          `ID:${p.id} | ${p.title} | ${p.type}${p.bedrooms != null ? " " + p.bedrooms + "BR" : ""} | ${p.area}sqm | ${p.district || p.city} | QAR ${p.price.toLocaleString()} ${p.listingType === "RENT" ? "/month" : "for sale"}${p.furnishing ? " | " + p.furnishing : ""}${p.utilityBillsIncluded ? " | utilities included" : ""}`,
       )
       .join("\n")
 
@@ -38,7 +38,7 @@ INSTRUCTIONS:
 - Help visitors find properties matching their needs (budget, bedrooms, district, type)
 - When mentioning a property, link it: [Property Title](/listings/ID)
 - Answer questions about Qatar neighborhoods, RERA regulations, and the rental/buying process
-- Rent prices shown are annual (per year)
+- Rent prices shown are monthly (per month)
 - Currency is QAR (Qatari Riyal)
 - When a visitor provides their name AND phone number, use the save_lead tool immediately
 - After saving their lead, confirm warmly that an agent will contact them shortly

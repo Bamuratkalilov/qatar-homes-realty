@@ -10,7 +10,7 @@ import { formatPrice, formatArea, PROPERTY_TYPES, cn } from "@/lib/utils"
 import {
   Plus, Eye, Edit, Bed, Bath, Maximize, MapPin, Search,
   LayoutGrid, List, SlidersHorizontal, X, ChevronDown,
-  Loader2, PenLine, ArrowUpDown,
+  Loader2, PenLine, ArrowUpDown, Link2,
 } from "lucide-react"
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -94,7 +94,7 @@ function FilterSelect({ label, value, options, onChange }: {
 }
 
 // ── Property Card (Grid) ─────────────────────────────────────────────────────
-function PropertyCard({ p }: { p: Property }) {
+function PropertyCard({ p, onInstagram }: { p: Property; onInstagram: (p: Property) => void }) {
   const isDraft = p.status === "OFF_MARKET"
   return (
     <div className={cn(
@@ -135,7 +135,7 @@ function PropertyCard({ p }: { p: Property }) {
         <p className="font-semibold text-slate-900 text-sm line-clamp-2 leading-snug">{p.title}</p>
         <p className="text-lg font-bold text-blue-600">
           {p.price > 0 ? formatPrice(p.price) : <span className="text-slate-300 text-sm">Price not set</span>}
-          {p.price > 0 && p.listingType === "RENT" && <span className="text-xs text-slate-400 font-normal"> /yr</span>}
+          {p.price > 0 && p.listingType === "RENT" && <span className="text-xs text-slate-400 font-normal"> /mo</span>}
         </p>
 
         <div className="flex items-center gap-3 text-xs text-slate-500">
@@ -158,6 +158,12 @@ function PropertyCard({ p }: { p: Property }) {
             {p.utilityBillsIncluded && " · Bills incl."}
           </span>
           <div className="flex gap-1">
+            {!isDraft && p.photos?.length > 0 && (
+              <Button variant="ghost" size="icon" className="h-7 w-7" title="Post to Instagram"
+                onClick={(e) => { e.preventDefault(); onInstagram(p) }}>
+                <span className="text-sm">📸</span>
+              </Button>
+            )}
             {!isDraft && (
               <Link href={`/listings/${p.id}`} target="_blank">
                 <Button variant="ghost" size="icon" className="h-7 w-7"><Eye className="w-3.5 h-3.5" /></Button>
@@ -213,7 +219,7 @@ function PropertyRow({ p }: { p: Property }) {
         <p className="font-bold text-blue-600 text-sm">
           {p.price > 0 ? formatPrice(p.price) : <span className="text-slate-300 text-xs">—</span>}
         </p>
-        {p.price > 0 && p.listingType === "RENT" && <p className="text-[10px] text-slate-400">/year</p>}
+        {p.price > 0 && p.listingType === "RENT" && <p className="text-[10px] text-slate-400">/month</p>}
       </div>
 
       {/* Status */}
@@ -255,6 +261,110 @@ export default function PropertiesPage() {
     listingType: "", category: "", type: "", status: "",
     furnishing: "", utilities: false, priceMin: "", priceMax: "",
   })
+
+  const [showImport, setShowImport] = useState(false)
+  const [importUrl, setImportUrl] = useState("")
+  const [importText, setImportText] = useState("")
+  const [importLoading, setImportLoading] = useState(false)
+  const [importError, setImportError] = useState("")
+
+  const [showXmlImport, setShowXmlImport] = useState(false)
+  const [xmlFile, setXmlFile] = useState<File | null>(null)
+  const [xmlLoading, setXmlLoading] = useState(false)
+  const [xmlResult, setXmlResult] = useState<{ imported: number; skipped: number; total: number } | null>(null)
+  const [xmlError, setXmlError] = useState("")
+
+  async function handleXmlImport() {
+    if (!xmlFile) return
+    setXmlLoading(true)
+    setXmlError("")
+    setXmlResult(null)
+    try {
+      const fd = new FormData()
+      fd.append("file", xmlFile)
+      const res = await fetch("/api/import-xml", { method: "POST", body: fd })
+      const json = await res.json()
+      if (!res.ok) { setXmlError(json.error || "Import failed"); return }
+      setXmlResult(json)
+      // Refresh properties list
+      fetch("/api/properties").then(r => r.json()).then(({ properties: p }) => setProperties(p || []))
+    } catch {
+      setXmlError("Something went wrong. Try again.")
+    } finally {
+      setXmlLoading(false)
+    }
+  }
+
+  async function handleImport() {
+    if (!importUrl.trim() && !importText.trim()) return
+    setImportLoading(true)
+    setImportError("")
+    try {
+      const res = await fetch("/api/import-property", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: importUrl.trim() || undefined, text: importText.trim() || undefined }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setImportError(json.error || "Import failed"); return }
+
+      const d = json.data
+      const draft = {
+        form: {
+          title: d.title || "",
+          category: d.category || "RESIDENTIAL",
+          type: d.type || "APARTMENT",
+          listingType: d.listingType || "RENT",
+          referenceNumber: "",
+          price: d.price ? String(d.price) : "",
+          area: d.area ? String(Math.round(d.area)) : "",
+          bedrooms: d.bedrooms != null ? String(d.bedrooms) : "",
+          bathrooms: d.bathrooms != null ? String(d.bathrooms) : "",
+          floor: d.floor != null ? String(d.floor) : "",
+          address: d.address || "",
+          district: d.district || "",
+          description: d.description || "",
+          furnishing: d.furnishing || "",
+          availabilityType: "IMMEDIATE",
+          availableFrom: "",
+          featured: false,
+        },
+        amenities: d.amenities || [],
+        utilities: [],
+        photos: d.photos || [],
+        coordinates: null,
+      }
+      localStorage.setItem("property_draft", JSON.stringify(draft))
+      router.push("/dashboard/properties/new")
+    } catch {
+      setImportError("Something went wrong. Try again.")
+    } finally {
+      setImportLoading(false)
+    }
+  }
+
+  const [igPosting, setIgPosting] = useState<string | null>(null)
+  const [igToast, setIgToast] = useState<{ msg: string; ok: boolean } | null>(null)
+
+  async function handleInstagramPost(p: Property) {
+    setIgPosting(p.id)
+    setIgToast(null)
+    try {
+      const res = await fetch("/api/instagram", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ property: p }),
+      })
+      const json = await res.json()
+      if (res.ok) setIgToast({ msg: "Posted to Instagram!", ok: true })
+      else setIgToast({ msg: json.error || "Failed to post", ok: false })
+    } catch {
+      setIgToast({ msg: "Could not reach Instagram", ok: false })
+    } finally {
+      setIgPosting(null)
+      setTimeout(() => setIgToast(null), 4000)
+    }
+  }
 
   useEffect(() => {
     fetch("/api/properties")
@@ -326,9 +436,17 @@ export default function PropertiesPage() {
         title="Properties"
         description={`${properties.filter(p => p.status !== "OFF_MARKET").length} published · ${properties.filter(p => p.status === "OFF_MARKET").length} drafts`}
         actions={
-          <Link href="/dashboard/properties/new">
-            <Button size="sm" className="gap-2"><Plus className="w-4 h-4" /> Add Property</Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" className="gap-2" onClick={() => { setShowXmlImport(true); setXmlFile(null); setXmlResult(null); setXmlError("") }}>
+              <Link2 className="w-4 h-4" /> Bulk Import XML
+            </Button>
+            <Button size="sm" variant="outline" className="gap-2" onClick={() => { setShowImport(true); setImportUrl(""); setImportText(""); setImportError("") }}>
+              Import from URL
+            </Button>
+            <Link href="/dashboard/properties/new">
+              <Button size="sm" className="gap-2"><Plus className="w-4 h-4" /> Add Property</Button>
+            </Link>
+          </div>
         }
       />
 
@@ -527,7 +645,7 @@ export default function PropertiesPage() {
                 <p className="text-xs font-semibold text-amber-600 uppercase tracking-wider">Drafts — hidden from website ({drafts.length})</p>
                 {view === "grid" ? (
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    {drafts.map((p) => <PropertyCard key={p.id} p={p} />)}
+                    {drafts.map((p) => <PropertyCard key={p.id} p={p} onInstagram={handleInstagramPost} />)}
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -543,7 +661,7 @@ export default function PropertiesPage() {
                 {drafts.length > 0 && <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Published listings ({allPublished.length})</p>}
                 {view === "grid" ? (
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    {published.map((p) => <PropertyCard key={p.id} p={p} />)}
+                    {published.map((p) => <PropertyCard key={p.id} p={p} onInstagram={handleInstagramPost} />)}
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -609,6 +727,140 @@ export default function PropertiesPage() {
           </div>
         )}
       </div>
+
+      {/* Instagram toast */}
+      {igToast && (
+        <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-2xl shadow-xl text-sm font-medium text-white transition-all ${igToast.ok ? "bg-green-600" : "bg-red-500"}`}>
+          {igToast.ok ? "📸 " : "⚠️ "}{igToast.msg}
+        </div>
+      )}
+      {igPosting && (
+        <div className="fixed bottom-6 right-6 z-50 px-5 py-3 rounded-2xl shadow-xl text-sm font-medium text-white bg-purple-600 flex items-center gap-2">
+          <Loader2 className="w-4 h-4 animate-spin" /> Posting to Instagram…
+        </div>
+      )}
+
+      {/* Bulk XML Import modal */}
+      {showXmlImport && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setShowXmlImport(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Bulk Import from XML</h2>
+                <p className="text-sm text-slate-500 mt-0.5">Import all your Property Finder listings at once</p>
+              </div>
+              <button onClick={() => setShowXmlImport(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            </div>
+
+            {!xmlResult ? (
+              <div className="space-y-4">
+                <ol className="text-xs text-slate-500 space-y-1.5 bg-slate-50 rounded-xl p-3">
+                  <li>1. Go to Property Finder → My Listings → Export</li>
+                  <li>2. Select <strong>XML</strong> format and download</li>
+                  <li>3. Upload the file below</li>
+                </ol>
+
+                <label className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-8 cursor-pointer transition-colors ${xmlFile ? "border-blue-400 bg-blue-50" : "border-slate-200 hover:border-blue-300"}`}>
+                  <input type="file" accept=".xml" className="hidden" onChange={(e) => setXmlFile(e.target.files?.[0] || null)} />
+                  {xmlFile ? (
+                    <>
+                      <p className="text-sm font-semibold text-blue-700">{xmlFile.name}</p>
+                      <p className="text-xs text-blue-500 mt-1">{(xmlFile.size / 1024).toFixed(1)} KB — click to change</p>
+                    </>
+                  ) : (
+                    <>
+                      <Link2 className="w-8 h-8 text-slate-300 mb-2" />
+                      <p className="text-sm font-medium text-slate-600">Click to upload XML file</p>
+                      <p className="text-xs text-slate-400 mt-1">Property Finder or Bayut export</p>
+                    </>
+                  )}
+                </label>
+
+                {xmlError && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{xmlError}</p>}
+
+                <button
+                  onClick={handleXmlImport}
+                  disabled={xmlLoading || !xmlFile}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
+                  {xmlLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Importing...</> : "Import All Listings"}
+                </button>
+              </div>
+            ) : (
+              <div className="text-center space-y-4">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                  <span className="text-3xl">✓</span>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-slate-900">{xmlResult.imported} imported</p>
+                  <p className="text-sm text-slate-500 mt-1">
+                    {xmlResult.skipped > 0 ? `${xmlResult.skipped} skipped (already exist or missing title)` : "All listings imported successfully"}
+                  </p>
+                </div>
+                <button onClick={() => setShowXmlImport(false)} className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl">
+                  Done
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Import from URL modal */}
+      {showImport && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setShowImport(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Import Listing</h2>
+                <p className="text-sm text-slate-500 mt-0.5">Paste the link — AI extracts all details and photos</p>
+              </div>
+              <button onClick={() => setShowImport(false)} className="text-slate-400 hover:text-slate-600 p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Listing URL</label>
+                <input
+                  type="url"
+                  value={importUrl}
+                  onChange={(e) => setImportUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleImport()}
+                  placeholder="https://www.propertyfinder.qa/en/..."
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  autoFocus
+                />
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                <div className="flex-1 h-px bg-slate-200" />
+                <span>or paste listing text below</span>
+                <div className="flex-1 h-px bg-slate-200" />
+              </div>
+              <textarea
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                placeholder="Paste the listing text here as a fallback..."
+                rows={4}
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              />
+
+              {importError && (
+                <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{importError}</p>
+              )}
+
+              <button
+                onClick={handleImport}
+                disabled={importLoading || (!importUrl.trim() && !importText.trim())}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                {importLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Extracting details...</> : <><Link2 className="w-4 h-4" /> Import Listing</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

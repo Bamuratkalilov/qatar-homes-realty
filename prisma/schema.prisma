@@ -23,6 +23,7 @@ model User {
   clients     Client[]
   appointments Appointment[]
   messages    Message[]
+  articles    Article[]
 }
 
 model Account {
@@ -88,6 +89,7 @@ model Property {
   amenities            String[]
   featured             Boolean           @default(false)
   views                Int               @default(0)
+  favorites            Int               @default(0)
   agentId              String
   agent                User              @relation(fields: [agentId], references: [id])
   leads                Lead[]
@@ -203,6 +205,53 @@ model Message {
   createdAt DateTime @default(now())
 }
 
+model Article {
+  id          String        @id @default(cuid())
+  title       String
+  slug        String        @unique
+  excerpt     String?       @db.Text
+  coverImage  String?
+  layout      String        @default("standard")
+  content     Json
+  tags        String[]
+  status      ArticleStatus @default(DRAFT)
+  featured    Boolean       @default(false)
+  authorId    String
+  author      User          @relation(fields: [authorId], references: [id])
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+enum ArticleStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model Community {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  nameAr      String?
+  district    String
+  city        String   @default("Doha")
+  description String?  @db.Text
+  polygon     Json?
+  centerLat   Float?
+  centerLng   Float?
+  thumbnail   String?
+  photos      String[]
+  tags        String[]
+  avgRentQar  Int?
+  avgSaleQar  Int?
+  content     Json?
+  featured    Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 model WhatsAppConversation {
   id        String               @id @default(cuid())
   phone     String               @unique
@@ -282,6 +331,8 @@ enum LeadSource {
   PHONE
   REFERRAL
   SOCIAL_MEDIA
+  TIKTOK
+  WHATSAPP
   PROPERTY_FINDER
   BAYUT
   WALK_IN

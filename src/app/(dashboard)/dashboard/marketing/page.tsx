@@ -109,7 +109,7 @@ export default function MarketingPage() {
               <div className="text-center">
                 <p className="text-xs text-blue-600 font-medium uppercase">Suggested Price</p>
                 <p className="text-3xl font-bold text-blue-700 mt-1">{formatPrice(pricingResult.suggested)}</p>
-                {pricingForm.listingType === "RENT" && <p className="text-blue-500 text-sm">/year</p>}
+                {pricingForm.listingType === "RENT" && <p className="text-blue-500 text-sm">/month</p>}
               </div>
               <div className="flex justify-between text-sm">
                 <div className="text-center">
@@ -220,12 +220,12 @@ export default function MarketingPage() {
               {
                 key: "new_listing",
                 label: "New Listing Alert",
-                text: "Hi [Name]! I have a new property that matches your requirements perfectly. It's a [BR] bedroom [Type] in [District], priced at QAR [Price]/year. It just became available today. Would you like to arrange a viewing this week? 🌟",
+                text: "Hi [Name]! I have a new property that matches your requirements perfectly. It's a [BR] bedroom [Type] in [District], priced at QAR [Price]/month. It just became available today. Would you like to arrange a viewing this week? 🌟",
               },
               {
                 key: "price_drop",
                 label: "Price Reduction",
-                text: "Great news [Name]! The landlord of the property you viewed has reduced the price to QAR [New Price]/year. This is a limited offer. Would you like to move forward? I can arrange the paperwork quickly. 💡",
+                text: "Great news [Name]! The landlord of the property you viewed has reduced the price to QAR [New Price]/month. This is a limited offer. Would you like to move forward? I can arrange the paperwork quickly. 💡",
               },
               {
                 key: "document_reminder",

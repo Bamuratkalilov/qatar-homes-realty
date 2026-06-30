@@ -37,6 +37,27 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
   const [pageLoading, setPageLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
+  const [igLoading, setIgLoading] = useState(false)
+  const [igStatus, setIgStatus] = useState<"idle" | "done" | "error">("idle")
+  const [igMessage, setIgMessage] = useState("")
+
+  async function postToInstagram() {
+    if (!photos.length) { setIgStatus("error"); setIgMessage("Add at least one photo first"); return }
+    setIgLoading(true); setIgStatus("idle")
+    try {
+      const res = await fetch("/api/instagram", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          property: { ...form, id, photos, amenities, price: Number(form.price), area: Number(form.area), bedrooms: form.bedrooms ? Number(form.bedrooms) : null, bathrooms: form.bathrooms ? Number(form.bathrooms) : null },
+        }),
+      })
+      const json = await res.json()
+      if (res.ok) { setIgStatus("done"); setIgMessage("Posted to Instagram successfully!") }
+      else { setIgStatus("error"); setIgMessage(json.error || "Failed to post") }
+    } catch { setIgStatus("error"); setIgMessage("Could not reach Instagram") }
+    finally { setIgLoading(false) }
+  }
 
   // Load existing property
   useEffect(() => {
@@ -401,6 +422,31 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
                     <p className="text-xs text-slate-400">Highlights this property in the featured section</p>
                   </div>
                 </label>
+              </div>
+
+              {/* Instagram button */}
+              <div className="mb-3">
+                <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-100 rounded-xl p-4 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">📸</span>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">Post to Instagram</p>
+                      <p className="text-xs text-slate-500">AI generates caption + hashtags automatically</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {igStatus === "done" && <span className="text-xs text-green-600 font-medium">✅ Posted!</span>}
+                    {igStatus === "error" && <span className="text-xs text-red-600 font-medium">⚠️ {igMessage}</span>}
+                    <Button
+                      type="button"
+                      disabled={igLoading}
+                      onClick={postToInstagram}
+                      className="gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white border-0"
+                    >
+                      {igLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Posting…</> : "Post to Instagram"}
+                    </Button>
+                  </div>
+                </div>
               </div>
 
               {/* Bottom action bar */}

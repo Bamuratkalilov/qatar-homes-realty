@@ -152,7 +152,7 @@ export function LivePreview({
           {price > 0 ? (
             <p className="text-lg font-bold text-blue-600">
               {formatPrice(price)}
-              <span className="text-xs text-slate-400 font-normal ml-1">{form.listingType === "RENT" ? "/ year" : ""}</span>
+              <span className="text-xs text-slate-400 font-normal ml-1">{form.listingType === "RENT" ? "/ month" : ""}</span>
             </p>
           ) : (
             <p className="text-lg font-bold text-slate-200">QAR —</p>
