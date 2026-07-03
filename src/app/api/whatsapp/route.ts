@@ -69,11 +69,13 @@ export async function POST(req: NextRequest) {
     })
 
     // ── Load conversation history (last 20 msgs for context) ──────────────────
-    const history = await db.whatsAppMessage.findMany({
+    // Fetch DESC so we get the most recent 20, then reverse to chronological order
+    const historyRaw = await db.whatsAppMessage.findMany({
       where:   { conversationId: conversation.id },
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: "desc" },
       take: 20,
     })
+    const history = historyRaw.reverse()
 
     // ── Load available properties ─────────────────────────────────────────────
     const properties = await db.property.findMany({
@@ -222,11 +224,20 @@ Morning: 9:00 AM, 10:30 AM | Afternoon: 2:00 PM, 4:00 PM | Evening: 6:00 PM, 7:0
       },
     ]
 
-    // Build message history for Claude (full conversation context)
-    const messages: Anthropic.MessageParam[] = history.map((m) => ({
-      role:    m.role as "user" | "assistant",
-      content: m.content,
-    }))
+    // Build message history for Claude — enforce strict user/assistant alternation.
+    // If the bot ever failed to reply, two user messages end up consecutive in DB,
+    // which causes Claude API to throw "roles must alternate". We fix by skipping
+    // any message that would repeat the same role as the previous one.
+    const messages: Anthropic.MessageParam[] = []
+    for (const m of history) {
+      const role = m.role as "user" | "assistant"
+      if (messages.length > 0 && messages[messages.length - 1].role === role) continue
+      messages.push({ role, content: m.content })
+    }
+    // Claude requires the final message to be from the user
+    while (messages.length > 0 && messages[messages.length - 1].role !== "user") {
+      messages.pop()
+    }
 
     // ── First Claude call ─────────────────────────────────────────────────────
     const response = await anthropic.messages.create({
@@ -382,8 +393,9 @@ Morning: 9:00 AM, 10:30 AM | Afternoon: 2:00 PM, 4:00 PM | Evening: 6:00 PM, 7:0
 
     return NextResponse.json({ status: "ok" })
   } catch (e) {
-    console.error("POST /api/whatsapp error:", e)
-    return NextResponse.json({ status: "error" }, { status: 200 }) // always 200 to Meta
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error("POST /api/whatsapp error:", msg, e)
+    return NextResponse.json({ status: "error", error: msg }, { status: 200 }) // always 200 to Meta
   }
 }
 
