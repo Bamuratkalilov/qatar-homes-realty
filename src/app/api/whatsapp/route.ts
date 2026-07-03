@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
     const historyRaw = await db.whatsAppMessage.findMany({
       where:   { conversationId: conversation.id },
       orderBy: { createdAt: "desc" },
-      take: 20,
+      take: 12,
     })
     const history = historyRaw.reverse()
 
@@ -92,23 +92,15 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://qatar-homes-realty.vercel.app"
     const propertyList = properties.map((p, i) => {
-      const freq  = p.listingType === "RENT" ? "/month" : "for sale"
-      const avail = p.availabilityType === "IMMEDIATE"
-        ? "Available now"
-        : p.availableFrom
-          ? `From ${new Date(p.availableFrom).toLocaleDateString("en-QA", { day: "numeric", month: "short" })}`
-          : "Contact for availability"
-      return [
-        `[${i + 1}] Ref: ${p.referenceNumber || p.id.slice(-6)} | ${p.title}`,
-        `  Type: ${p.type}${p.bedrooms != null ? `, ${p.bedrooms}BR` : ""}${p.bathrooms != null ? `, ${p.bathrooms}Bath` : ""} | ${p.area}sqm`,
-        `  Price: QAR ${p.price.toLocaleString()} ${freq}`,
-        `  Area: ${p.district || p.city} | Furnishing: ${p.furnishing || "TBC"} | Bills: ${p.utilityBillsIncluded ? "Included" : "Excluded"}`,
-        `  Status: ${avail}`,
-        `  Listing link: ${process.env.NEXT_PUBLIC_BASE_URL || "https://qatar-homes-realty.vercel.app"}/listings/${p.id}`,
-        `  Note: ${p.description?.slice(0, 120) || ""}`,
-      ].join("\n")
-    }).join("\n\n")
+      const freq  = p.listingType === "RENT" ? "/mo" : "sale"
+      const avail = p.availabilityType === "IMMEDIATE" ? "Now"
+        : p.availableFrom ? `From ${new Date(p.availableFrom).toLocaleDateString("en-QA", { day: "numeric", month: "short" })}` : "TBC"
+      const beds  = p.bedrooms != null ? `${p.bedrooms}BR` : ""
+      const bills = p.utilityBillsIncluded ? "Bills incl." : ""
+      return `[${i + 1}] ${p.referenceNumber || p.id.slice(-6)} | ${p.title} | ${p.type}${beds ? " " + beds : ""} | ${p.area}sqm | QAR ${p.price.toLocaleString()} ${freq} | ${p.district || p.city} | ${p.furnishing || "TBC"} | ${avail}${bills ? " | " + bills : ""} | ${BASE_URL}/listings/${p.id}`
+    }).join("\n")
 
     const todayStr = new Date().toLocaleDateString("en-QA", {
       weekday: "long", day: "numeric", month: "long", year: "numeric",
@@ -162,7 +154,9 @@ Morning: 9:00 AM, 10:30 AM | Afternoon: 2:00 PM, 4:00 PM | Evening: 6:00 PM, 7:0
 
 12. FORMAT: Plain text ONLY. No asterisks, no bullet points with -, no markdown. Use simple line breaks.
 
-13. GREET: On first message, introduce yourself: "Hi! I'm Sarah from Qatar Homes Realty. I'd love to help you find your perfect property in Qatar."`
+13. GREET: On first message, introduce yourself: "Hi! I'm Sarah from Qatar Homes Realty. I'd love to help you find your perfect property in Qatar."
+
+14. TOOL CALLS: ALWAYS include a short text reply in the SAME response as any tool call. Never return a tool call with no text — always say something brief alongside it (e.g. "Let me send you the location..." or "Here are the full details:").`
 
     // ── Claude tools ──────────────────────────────────────────────────────────
     const tools: Anthropic.Tool[] = [
