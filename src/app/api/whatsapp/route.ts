@@ -238,6 +238,10 @@ Morning: 9:00 AM, 10:30 AM | Afternoon: 2:00 PM, 4:00 PM | Evening: 6:00 PM, 7:0
     while (messages.length > 0 && messages[messages.length - 1].role !== "user") {
       messages.pop()
     }
+    // Safety: if history was completely broken, fall back to just the current message
+    if (messages.length === 0) {
+      messages.push({ role: "user", content: text })
+    }
 
     // ── First Claude call ─────────────────────────────────────────────────────
     const response = await anthropic.messages.create({
