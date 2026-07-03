@@ -5,7 +5,7 @@ import dynamic from "next/dynamic"
 import { cn, formatPrice } from "@/lib/utils"
 import {
   TrendingUp, Users, UserCheck, Home, ArrowUpRight,
-  Target, Loader2, Building2,
+  Target, Loader2, Building2, Eye,
 } from "lucide-react"
 
 // Dynamic imports — recharts accesses window.matchMedia at init which can crash SSR/hydration
@@ -253,7 +253,7 @@ export default function ReportsPage() {
                       {p.type} · {p.listingType === "RENT" ? "Rent" : "Sale"} · {formatPrice(p.price)}
                     </p>
                   </div>
-                  <div className="text-xs font-bold text-slate-600 flex-shrink-0">👁 {p.views}</div>
+                  <div className="text-xs font-bold text-slate-600 flex-shrink-0 flex items-center gap-1"><Eye className="w-3 h-3" /> {p.views}</div>
                 </div>
               ))}
             </div>

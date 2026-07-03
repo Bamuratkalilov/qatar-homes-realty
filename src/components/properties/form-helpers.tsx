@@ -14,7 +14,8 @@ export const AMENITIES_LIST = [
   "Laundry Room", "Guest Bathroom", "High Floor", "City View", "Mall Access",
 ]
 
-export const UTILITY_OPTIONS = ["Electricity", "Water", "Internet", "Gas", "Cooling (Chiller)"]
+export const BILLS_EXCLUDED  = "Bills Excluded"
+export const UTILITY_OPTIONS = ["Electricity", "Water", "Internet", "Cooling/AC"]
 
 export function generateRef() {
   return `QH-${Math.floor(10000 + Math.random() * 90000)}`
@@ -37,6 +38,34 @@ export function ToggleChip({ label, selected, onClick }: { label: string; select
   )
 }
 
+export function PriceInput({
+  value,
+  onChange,
+  placeholder = "e.g. 180,000",
+}: {
+  value: string
+  onChange: (raw: string) => void
+  placeholder?: string
+}) {
+  const formatted = value === "" ? "" : Number(value.replace(/,/g, "")).toLocaleString("en-US")
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const raw = e.target.value.replace(/[^0-9]/g, "")
+    onChange(raw)
+  }
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={formatted}
+      onChange={handleChange}
+      placeholder={placeholder}
+      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+    />
+  )
+}
+
 export function ToggleButton({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
   return (
     <button
@@ -54,10 +83,21 @@ export function ToggleButton({ label, selected, onClick }: { label: string; sele
   )
 }
 
-export function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+export function SectionCard({ title, children, error }: { title: string; children: React.ReactNode; error?: string }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
-      <h2 className="font-semibold text-slate-800 text-sm uppercase tracking-wide">{title}</h2>
+    <div className={cn(
+      "bg-white rounded-xl border p-6 space-y-4 transition-colors",
+      error ? "border-red-300 ring-1 ring-red-200" : "border-slate-200"
+    )}>
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold text-slate-800 text-sm uppercase tracking-wide">{title}</h2>
+        {error && (
+          <span className="flex items-center gap-1 text-xs font-medium text-red-500 bg-red-50 px-2 py-0.5 rounded-full">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
+            {error}
+          </span>
+        )}
+      </div>
       {children}
     </div>
   )
@@ -70,6 +110,7 @@ export interface FormState {
   listingType: string
   referenceNumber: string
   price: string
+  rentFrequency: string
   area: string
   bedrooms: string
   bathrooms: string
@@ -85,7 +126,7 @@ export interface FormState {
 
 export const EMPTY_FORM: FormState = {
   title: "", category: "RESIDENTIAL", type: "APARTMENT", listingType: "RENT",
-  referenceNumber: "", price: "", area: "", bedrooms: "", bathrooms: "", floor: "",
+  referenceNumber: "", price: "", rentFrequency: "MONTHLY", area: "", bedrooms: "", bathrooms: "", floor: "",
   address: "", district: "", description: "",
   furnishing: "", availabilityType: "IMMEDIATE", availableFrom: "", featured: false,
 }
@@ -129,10 +170,10 @@ export function LivePreview({
               For {form.listingType === "RENT" ? "Rent" : "Sale"}
             </span>
             <span className="text-xs font-semibold bg-white/90 text-slate-700 px-2.5 py-1 rounded-full">
-              {form.category === "RESIDENTIAL" ? "🏠" : "🏢"} {form.category.charAt(0) + form.category.slice(1).toLowerCase()}
+              {form.category.charAt(0) + form.category.slice(1).toLowerCase()}
             </span>
             {form.featured && (
-              <span className="text-xs font-bold bg-amber-500 text-white px-2.5 py-1 rounded-full">⭐ Featured</span>
+              <span className="text-xs font-bold bg-amber-500 text-white px-2.5 py-1 rounded-full">Featured</span>
             )}
           </div>
           {photos.length > 1 && (

@@ -278,7 +278,7 @@ export default function InquiryPage() {
               <div className={`flex border rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 ${lang === "ar" ? "flex-row-reverse" : ""} ${err("phone") ? borderErr : borderOk}`}>
                 <div className="flex items-center gap-1.5 px-3 bg-slate-50 border-slate-200 text-slate-600 font-semibold text-sm whitespace-nowrap select-none border-r">
                   <Phone className="w-3.5 h-3.5 text-slate-400" />
-                  🇶🇦 +974
+                  +974
                 </div>
                 <input type="tel" value={form.phone}
                   onChange={(e) => { const d = e.target.value.replace(/\D/g, "").slice(0, 8); set("phone", d) }}

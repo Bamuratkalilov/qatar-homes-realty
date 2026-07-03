@@ -71,7 +71,7 @@ export async function sendAppointmentConfirmation({
             <h1 style="color: white; margin: 0;">${process.env.NEXT_PUBLIC_AGENCY_NAME || "Qatar Homes Realty"}</h1>
           </div>
           <div style="background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; border-top: none;">
-            <h2 style="color: #1e3a5f;">Appointment Confirmed ✓</h2>
+            <h2 style="color: #1e3a5f;">Appointment Confirmed</h2>
             <p>Dear ${clientName},</p>
             <p>Your appointment has been confirmed. Here are the details:</p>
             <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin: 20px 0;">

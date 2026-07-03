@@ -540,17 +540,16 @@ export default async function DashboardPage() {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: "Add Property", href: "/dashboard/properties/new", icon: "🏠" },
-              { label: "New Lead", href: "/dashboard/leads", icon: "👤" },
-              { label: "Schedule Viewing", href: "/dashboard/calendar", icon: "📅" },
-              { label: "AI Assistant", href: "/dashboard/assistant", icon: "🤖" },
-            ].map(({ label, href, icon }) => (
+              { label: "Add Property", href: "/dashboard/properties/new" },
+              { label: "New Lead", href: "/dashboard/leads" },
+              { label: "Schedule Viewing", href: "/dashboard/calendar" },
+              { label: "AI Assistant", href: "/dashboard/assistant" },
+            ].map(({ label, href }) => (
               <Link
                 key={label}
                 href={href}
-                className="bg-white/10 hover:bg-white/20 text-white text-sm font-medium py-3 px-4 rounded-lg text-center transition flex flex-col items-center gap-1.5"
+                className="bg-white/10 hover:bg-white/20 text-white text-sm font-medium py-3 px-4 rounded-lg text-center transition"
               >
-                <span className="text-xl">{icon}</span>
                 {label}
               </Link>
             ))}

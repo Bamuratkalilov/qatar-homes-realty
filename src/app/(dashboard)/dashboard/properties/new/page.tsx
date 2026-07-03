@@ -8,12 +8,12 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select } from "@/components/ui/select"
 import { RESIDENTIAL_TYPES, COMMERCIAL_TYPES, QATAR_DISTRICTS, cn } from "@/lib/utils"
-import { Wand2, Save, ArrowLeft, RefreshCw, Globe, AlertCircle, MapPin } from "lucide-react"
+import { Wand2, Save, ArrowLeft, RefreshCw, Globe, AlertCircle, MapPin, ImageIcon } from "lucide-react"
 import dynamic from "next/dynamic"
 import { PhotoManager } from "@/components/properties/photo-manager"
 import {
-  AMENITIES_LIST, UTILITY_OPTIONS, generateRef,
-  ToggleChip, ToggleButton, SectionCard, LivePreview,
+  AMENITIES_LIST, UTILITY_OPTIONS, BILLS_EXCLUDED, generateRef,
+  ToggleChip, ToggleButton, SectionCard, LivePreview, PriceInput,
 } from "@/components/properties/form-helpers"
 
 const MapPicker = dynamic(
@@ -26,6 +26,7 @@ export default function NewPropertyPage() {
   const router = useRouter()
   const [loading, setLoading] = useState<"draft" | "publish" | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [aiLoading, setAiLoading] = useState(false)
   const [postToInstagram, setPostToInstagram] = useState(false)
   const [igStatus, setIgStatus] = useState<"idle" | "posting" | "done" | "error">("idle")
@@ -38,6 +39,7 @@ export default function NewPropertyPage() {
     listingType: "RENT",
     referenceNumber: "",
     price: "",
+    rentFrequency: "MONTHLY",
     area: "",
     bedrooms: "",
     bathrooms: "",
@@ -149,7 +151,15 @@ export default function NewPropertyPage() {
   }
 
   function toggleUtility(u: string) {
-    setUtilities((prev) => prev.includes(u) ? prev.filter((x) => x !== u) : [...prev, u])
+    setUtilities((prev) => {
+      if (u === BILLS_EXCLUDED) {
+        // Selecting "Bills Excluded" clears everything else
+        return prev.includes(u) ? [] : [u]
+      }
+      // Selecting any bill removes "Bills Excluded"
+      const without = prev.filter((x) => x !== BILLS_EXCLUDED)
+      return without.includes(u) ? without.filter((x) => x !== u) : [...without, u]
+    })
   }
 
   async function generateDescription() {
@@ -169,13 +179,27 @@ export default function NewPropertyPage() {
   }
 
   async function submit(status: "OFF_MARKET" | "AVAILABLE") {
-    // Basic validation
-    if (!form.title.trim()) { setError("Property title is required"); return }
-    if (!form.price) { setError("Price is required"); return }
-    if (!form.area) { setError("Area is required"); return }
-    if (!form.address.trim()) { setError("Address is required — please fill in or pick from the map"); return }
+    const errs: Record<string, string> = {}
+
+    if (!form.price || parseFloat(form.price) <= 0) errs.pricing = "Price required"
+    if (!form.area  || parseFloat(form.area)  <= 0) errs.pricing = (errs.pricing ? errs.pricing + " · " : "") + "Area required"
+    if (!form.furnishing)                            errs.availability = "Select furnishing"
+    if (photos.length < 3)                           errs.photos = `Add at least 3 photos (${photos.length}/3)`
+    if (!form.title.trim())                          errs.titleDesc = "Title required"
+    if (!form.description.trim())                    errs.titleDesc = (errs.titleDesc ? errs.titleDesc + " · " : "") + "Description required"
+    if (!form.address.trim())                        errs.location = "Address required"
+
+    setFieldErrors(errs)
+    if (Object.keys(errs).length > 0) {
+      setError("Please complete all required sections before saving.")
+      // Scroll to first error
+      const first = document.querySelector("[data-section-error]")
+      first?.scrollIntoView({ behavior: "smooth", block: "center" })
+      return
+    }
 
     setError(null)
+    setFieldErrors({})
     setLoading(status === "OFF_MARKET" ? "draft" : "publish")
     try {
       const res = await fetch("/api/properties", {
@@ -337,8 +361,8 @@ export default function NewPropertyPage() {
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Category *</label>
                   <div className="flex gap-3">
-                    <ToggleButton label="🏠 Residential" selected={form.category === "RESIDENTIAL"} onClick={() => setForm((f) => ({ ...f, category: "RESIDENTIAL", type: "APARTMENT" }))} />
-                    <ToggleButton label="🏢 Commercial" selected={form.category === "COMMERCIAL"} onClick={() => setForm((f) => ({ ...f, category: "COMMERCIAL", type: "OFFICE" }))} />
+                    <ToggleButton label="Residential" selected={form.category === "RESIDENTIAL"} onClick={() => setForm((f) => ({ ...f, category: "RESIDENTIAL", type: "APARTMENT" }))} />
+                    <ToggleButton label="Commercial" selected={form.category === "COMMERCIAL"} onClick={() => setForm((f) => ({ ...f, category: "COMMERCIAL", type: "OFFICE" }))} />
                   </div>
                 </div>
 
@@ -373,12 +397,27 @@ export default function NewPropertyPage() {
               </SectionCard>
 
               {/* 3. Pricing & Size */}
-              <SectionCard title="Pricing & Size">
-                <div className="grid grid-cols-2 gap-4">
+              <div data-section-error={fieldErrors.pricing ? true : undefined}>
+              <SectionCard title="Pricing & Size" error={fieldErrors.pricing}>
+                <div className={form.listingType === "RENT" ? "grid grid-cols-3 gap-4" : "grid grid-cols-2 gap-4"}>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">Price (QAR) *</label>
-                    <Input type="number" value={form.price} onChange={(e) => update("price", e.target.value)} placeholder="e.g. 180000" required />
+                    <PriceInput value={form.price} onChange={(raw) => update("price", raw)} />
                   </div>
+                  {form.listingType === "RENT" && (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">Billing Cycle</label>
+                      <select
+                        value={form.rentFrequency}
+                        onChange={(e) => update("rentFrequency", e.target.value)}
+                        className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        <option value="MONTHLY">Per Month</option>
+                        <option value="WEEKLY">Per Week</option>
+                        <option value="DAILY">Per Day</option>
+                      </select>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">Area (sqm) *</label>
                     <Input type="number" value={form.area} onChange={(e) => update("area", e.target.value)} placeholder="e.g. 185" required />
@@ -399,14 +438,16 @@ export default function NewPropertyPage() {
                   </div>
                 </div>
               </SectionCard>
+              </div>
 
               {/* 4. Availability & Furnishing */}
-              <SectionCard title="Availability & Condition">
+              <div data-section-error={fieldErrors.availability ? true : undefined}>
+              <SectionCard title="Availability & Condition" error={fieldErrors.availability}>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Available</label>
                   <div className="flex gap-3">
-                    <ToggleButton label="⚡ Immediate" selected={form.availabilityType === "IMMEDIATE"} onClick={() => update("availabilityType", "IMMEDIATE")} />
-                    <ToggleButton label="📅 From Date" selected={form.availabilityType === "DATE"} onClick={() => update("availabilityType", "DATE")} />
+                    <ToggleButton label="Immediate" selected={form.availabilityType === "IMMEDIATE"} onClick={() => update("availabilityType", "IMMEDIATE")} />
+                    <ToggleButton label="From Date" selected={form.availabilityType === "DATE"} onClick={() => update("availabilityType", "DATE")} />
                   </div>
                   {form.availabilityType === "DATE" && (
                     <div className="mt-3">
@@ -428,11 +469,14 @@ export default function NewPropertyPage() {
                   </div>
                 </div>
               </SectionCard>
+              </div>
 
               {/* 5. Photos */}
-              <SectionCard title="Photos">
+              <div data-section-error={fieldErrors.photos ? true : undefined}>
+              <SectionCard title="Photos" error={fieldErrors.photos}>
                 <PhotoManager photos={photos} onChange={setPhotos} />
               </SectionCard>
+              </div>
 
               {/* 6. Amenities */}
               <SectionCard title="Amenities">
@@ -448,9 +492,15 @@ export default function NewPropertyPage() {
               </SectionCard>
 
               {/* 7. Utility Bills */}
-              <SectionCard title="Utility Bills Included">
-                <p className="text-xs text-slate-400 -mt-2">Select which bills are included in the price</p>
+              <SectionCard title="Utility Bills">
+                <p className="text-xs text-slate-400 -mt-2">Select bills included in the price, or mark as excluded</p>
                 <div className="flex flex-wrap gap-2">
+                  <ToggleChip
+                    label="Bills Excluded"
+                    selected={utilities.includes(BILLS_EXCLUDED)}
+                    onClick={() => toggleUtility(BILLS_EXCLUDED)}
+                  />
+                  <div className="w-px bg-slate-200 self-stretch mx-1" />
                   {UTILITY_OPTIONS.map((u) => (
                     <ToggleChip key={u} label={u} selected={utilities.includes(u)} onClick={() => toggleUtility(u)} />
                   ))}
@@ -458,7 +508,8 @@ export default function NewPropertyPage() {
               </SectionCard>
 
               {/* 8. Title + Description */}
-              <SectionCard title="Title & Description">
+              <div data-section-error={fieldErrors.titleDesc ? true : undefined}>
+              <SectionCard title="Title & Description" error={fieldErrors.titleDesc}>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Property Title *</label>
                   <Input
@@ -485,9 +536,11 @@ export default function NewPropertyPage() {
                   />
                 </div>
               </SectionCard>
+              </div>
 
               {/* 9. Location — at the end as requested */}
-              <SectionCard title="Location">
+              <div data-section-error={fieldErrors.location ? true : undefined}>
+              <SectionCard title="Location" error={fieldErrors.location}>
                 {/* Map picker button */}
                 <button
                   type="button"
@@ -535,6 +588,7 @@ export default function NewPropertyPage() {
                     options={QATAR_DISTRICTS.map((d) => ({ value: d, label: d }))} />
                 </div>
               </SectionCard>
+              </div>
 
               {/* Map Picker Modal */}
               {showMap && (
@@ -574,7 +628,7 @@ export default function NewPropertyPage() {
                 {/* Instagram toggle */}
                 <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-100 rounded-xl p-4 mb-3 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl">📸</span>
+                    <ImageIcon className="w-6 h-6 text-purple-400 flex-shrink-0" />
                     <div>
                       <p className="text-sm font-semibold text-slate-800">Post to Instagram</p>
                       <p className="text-xs text-slate-500">AI writes the caption + hashtags automatically</p>
@@ -589,17 +643,17 @@ export default function NewPropertyPage() {
                 {/* Status messages */}
                 {igStatus === "posting" && (
                   <div className="bg-purple-50 border border-purple-100 rounded-xl px-4 py-3 mb-3 text-sm text-purple-700 flex items-center gap-2">
-                    <span className="animate-spin">⏳</span> Posting to Instagram…
+                    Posting to Instagram…
                   </div>
                 )}
                 {igStatus === "done" && (
                   <div className="bg-green-50 border border-green-100 rounded-xl px-4 py-3 mb-3 text-sm text-green-700">
-                    ✅ Posted to Instagram successfully!
+                    Posted to Instagram successfully!
                   </div>
                 )}
                 {igStatus === "error" && (
                   <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 mb-3 text-sm text-red-700">
-                    ⚠️ {igError || "Instagram post failed"} — listing was still published.
+                    {igError || "Instagram post failed"} — listing was still published.
                   </div>
                 )}
 
@@ -619,7 +673,7 @@ export default function NewPropertyPage() {
                     </Button>
                     <Button type="button" disabled={loading !== null} onClick={() => submit("AVAILABLE")} className="gap-2 bg-green-600 hover:bg-green-700">
                       <Globe className="w-4 h-4" />
-                      {loading === "publish" ? "Publishing…" : postToInstagram ? "Publish + Post 📸" : "Publish Listing"}
+                      {loading === "publish" ? "Publishing…" : postToInstagram ? "Publish + Post to Instagram" : "Publish Listing"}
                     </Button>
                   </div>
                 </div>

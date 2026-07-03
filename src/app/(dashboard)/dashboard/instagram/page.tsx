@@ -49,12 +49,12 @@ interface Adjustments {
 const DEFAULT_ADJ: Adjustments = { brightness: 100, contrast: 100, saturation: 100, warmth: 0, sharpness: 0 }
 
 const PRESETS = [
-  { name: "Original", emoji: "🔄", adj: DEFAULT_ADJ },
-  { name: "Bright", emoji: "☀️", adj: { brightness: 115, contrast: 105, saturation: 110, warmth: 5, sharpness: 10 } },
-  { name: "Warm", emoji: "🌅", adj: { brightness: 105, contrast: 108, saturation: 115, warmth: 25, sharpness: 5 } },
-  { name: "Clean", emoji: "✨", adj: { brightness: 108, contrast: 112, saturation: 95, warmth: -5, sharpness: 20 } },
-  { name: "Luxury", emoji: "💎", adj: { brightness: 100, contrast: 120, saturation: 105, warmth: 10, sharpness: 15 } },
-  { name: "Cool", emoji: "🌊", adj: { brightness: 105, contrast: 110, saturation: 105, warmth: -20, sharpness: 10 } },
+  { name: "Original", adj: DEFAULT_ADJ },
+  { name: "Bright", adj: { brightness: 115, contrast: 105, saturation: 110, warmth: 5, sharpness: 10 } },
+  { name: "Warm", adj: { brightness: 105, contrast: 108, saturation: 115, warmth: 25, sharpness: 5 } },
+  { name: "Clean", adj: { brightness: 108, contrast: 112, saturation: 95, warmth: -5, sharpness: 20 } },
+  { name: "Luxury", adj: { brightness: 100, contrast: 120, saturation: 105, warmth: 10, sharpness: 15 } },
+  { name: "Cool", adj: { brightness: 105, contrast: 110, saturation: 105, warmth: -20, sharpness: 10 } },
 ]
 
 function buildFilter(adj: Adjustments) {
@@ -141,7 +141,7 @@ function PhotoEditorModal({ url, onSave, onClose }: { url: string; onSave: (url:
                     JSON.stringify(adj) === JSON.stringify(p.adj) ? "border-blue-500" : "border-transparent hover:border-slate-300")}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={url} alt={p.name} className="w-full aspect-square object-cover" style={{ filter: buildFilter(p.adj) }} />
-                  <div className="absolute bottom-0 inset-x-0 bg-black/50 text-white text-[10px] font-medium py-0.5 text-center">{p.emoji} {p.name}</div>
+                  <div className="absolute bottom-0 inset-x-0 bg-black/50 text-white text-[10px] font-medium py-0.5 text-center">{p.name}</div>
                 </button>
               ))}
             </div>
@@ -388,7 +388,7 @@ export default function InstagramPage() {
           {!selected ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-400">
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center">
-                <span className="text-3xl">📸</span>
+                <ImageIcon className="w-8 h-8 text-purple-400" />
               </div>
               <p className="font-medium text-slate-600">Select a listing to start</p>
               <p className="text-sm">Choose from the left panel</p>
@@ -481,7 +481,7 @@ export default function InstagramPage() {
           <div className="p-4 border-b border-slate-100">
             <h2 className="font-semibold text-slate-800 flex items-center gap-2">
               <div className="w-6 h-6 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-                <span className="text-xs">📸</span>
+                <ImageIcon className="w-3.5 h-3.5 text-white" />
               </div>
               Post to Instagram
             </h2>

@@ -10,7 +10,7 @@ import { formatPrice, formatArea, PROPERTY_TYPES, cn } from "@/lib/utils"
 import {
   Plus, Eye, Edit, Bed, Bath, Maximize, MapPin, Search,
   LayoutGrid, List, SlidersHorizontal, X, ChevronDown,
-  Loader2, PenLine, ArrowUpDown, Link2,
+  Loader2, PenLine, ArrowUpDown, Link2, Trash2,
 } from "lucide-react"
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -94,7 +94,7 @@ function FilterSelect({ label, value, options, onChange }: {
 }
 
 // ── Property Card (Grid) ─────────────────────────────────────────────────────
-function PropertyCard({ p, onInstagram }: { p: Property; onInstagram: (p: Property) => void }) {
+function PropertyCard({ p, onInstagram, onDelete }: { p: Property; onInstagram: (p: Property) => void; onDelete: (id: string) => void }) {
   const isDraft = p.status === "OFF_MARKET"
   return (
     <div className={cn(
@@ -161,7 +161,7 @@ function PropertyCard({ p, onInstagram }: { p: Property; onInstagram: (p: Proper
             {!isDraft && p.photos?.length > 0 && (
               <Button variant="ghost" size="icon" className="h-7 w-7" title="Post to Instagram"
                 onClick={(e) => { e.preventDefault(); onInstagram(p) }}>
-                <span className="text-sm">📸</span>
+                <span className="text-xs font-semibold">IG</span>
               </Button>
             )}
             {!isDraft && (
@@ -172,6 +172,12 @@ function PropertyCard({ p, onInstagram }: { p: Property; onInstagram: (p: Proper
             <Link href={`/dashboard/properties/${p.id}/edit`}>
               <Button variant="ghost" size="icon" className="h-7 w-7"><Edit className="w-3.5 h-3.5" /></Button>
             </Link>
+            {isDraft && (
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50"
+                onClick={(e) => { e.preventDefault(); onDelete(p.id) }}>
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -180,7 +186,7 @@ function PropertyCard({ p, onInstagram }: { p: Property; onInstagram: (p: Proper
 }
 
 // ── Property Row (List) ──────────────────────────────────────────────────────
-function PropertyRow({ p }: { p: Property }) {
+function PropertyRow({ p, onDelete }: { p: Property; onDelete: (id: string) => void }) {
   const isDraft = p.status === "OFF_MARKET"
   return (
     <div className={cn(
@@ -239,6 +245,12 @@ function PropertyRow({ p }: { p: Property }) {
         <Link href={`/dashboard/properties/${p.id}/edit`}>
           <Button variant="ghost" size="icon" className="h-7 w-7"><Edit className="w-3.5 h-3.5" /></Button>
         </Link>
+        {isDraft && (
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50"
+            onClick={() => onDelete(p.id)}>
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
+        )}
       </div>
     </div>
   )
@@ -345,6 +357,19 @@ export default function PropertiesPage() {
 
   const [igPosting, setIgPosting] = useState<string | null>(null)
   const [igToast, setIgToast] = useState<{ msg: string; ok: boolean } | null>(null)
+
+  async function handleDelete(id: string) {
+    if (!confirm("Delete this draft? This cannot be undone.")) return
+    await fetch(`/api/properties/${id}`, { method: "DELETE" })
+    setProperties((prev) => prev.filter((p) => p.id !== id))
+  }
+
+  async function handleDeleteAllDrafts() {
+    const draftList = properties.filter((p) => p.status === "OFF_MARKET")
+    if (!confirm(`Delete all ${draftList.length} draft listings? This cannot be undone.`)) return
+    await Promise.all(draftList.map((p) => fetch(`/api/properties/${p.id}`, { method: "DELETE" })))
+    setProperties((prev) => prev.filter((p) => p.status !== "OFF_MARKET"))
+  }
 
   async function handleInstagramPost(p: Property) {
     setIgPosting(p.id)
@@ -642,14 +667,20 @@ export default function PropertiesPage() {
             {/* Drafts */}
             {drafts.length > 0 && showDrafts && (
               <div className="space-y-3">
-                <p className="text-xs font-semibold text-amber-600 uppercase tracking-wider">Drafts — hidden from website ({drafts.length})</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-amber-600 uppercase tracking-wider">Drafts — hidden from website ({drafts.length})</p>
+                  <button onClick={handleDeleteAllDrafts}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-red-500 hover:text-red-700 px-3 py-1.5 rounded-lg hover:bg-red-50 transition border border-red-200">
+                    <Trash2 className="w-3.5 h-3.5" /> Delete all drafts
+                  </button>
+                </div>
                 {view === "grid" ? (
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    {drafts.map((p) => <PropertyCard key={p.id} p={p} onInstagram={handleInstagramPost} />)}
+                    {drafts.map((p) => <PropertyCard key={p.id} p={p} onInstagram={handleInstagramPost} onDelete={handleDelete} />)}
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {drafts.map((p) => <PropertyRow key={p.id} p={p} />)}
+                    {drafts.map((p) => <PropertyRow key={p.id} p={p} onDelete={handleDelete} />)}
                   </div>
                 )}
               </div>
@@ -661,11 +692,11 @@ export default function PropertiesPage() {
                 {drafts.length > 0 && <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Published listings ({allPublished.length})</p>}
                 {view === "grid" ? (
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    {published.map((p) => <PropertyCard key={p.id} p={p} onInstagram={handleInstagramPost} />)}
+                    {published.map((p) => <PropertyCard key={p.id} p={p} onInstagram={handleInstagramPost} onDelete={handleDelete} />)}
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {published.map((p) => <PropertyRow key={p.id} p={p} />)}
+                    {published.map((p) => <PropertyRow key={p.id} p={p} onDelete={handleDelete} />)}
                   </div>
                 )}
               </div>
@@ -731,7 +762,7 @@ export default function PropertiesPage() {
       {/* Instagram toast */}
       {igToast && (
         <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-2xl shadow-xl text-sm font-medium text-white transition-all ${igToast.ok ? "bg-green-600" : "bg-red-500"}`}>
-          {igToast.ok ? "📸 " : "⚠️ "}{igToast.msg}
+          {igToast.ok ? "" : "Error: "}{igToast.msg}
         </div>
       )}
       {igPosting && (

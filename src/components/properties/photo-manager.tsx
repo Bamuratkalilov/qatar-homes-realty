@@ -19,7 +19,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { Upload, X, GripVertical, Star, ImageIcon, Loader2, Sliders, Check, Sparkles } from "lucide-react"
+import { Upload, X, GripVertical, Star, ImageIcon, Loader2, Sliders, Check, Sparkles, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
@@ -71,13 +71,13 @@ interface Adjustments {
 
 const DEFAULT_ADJ: Adjustments = { brightness: 100, contrast: 100, saturation: 100, warmth: 0, sharpness: 0 }
 
-const PRESETS: { name: string; emoji: string; adj: Adjustments }[] = [
-  { name: "Original", emoji: "🔄", adj: DEFAULT_ADJ },
-  { name: "Bright", emoji: "☀️", adj: { brightness: 115, contrast: 105, saturation: 110, warmth: 5, sharpness: 10 } },
-  { name: "Warm", emoji: "🌅", adj: { brightness: 105, contrast: 108, saturation: 115, warmth: 25, sharpness: 5 } },
-  { name: "Clean", emoji: "✨", adj: { brightness: 108, contrast: 112, saturation: 95, warmth: -5, sharpness: 20 } },
-  { name: "Luxury", emoji: "💎", adj: { brightness: 100, contrast: 120, saturation: 105, warmth: 10, sharpness: 15 } },
-  { name: "Cool", emoji: "🌊", adj: { brightness: 105, contrast: 110, saturation: 105, warmth: -20, sharpness: 10 } },
+const PRESETS: { name: string; adj: Adjustments }[] = [
+  { name: "Original", adj: DEFAULT_ADJ },
+  { name: "Bright", adj: { brightness: 115, contrast: 105, saturation: 110, warmth: 5, sharpness: 10 } },
+  { name: "Warm", adj: { brightness: 105, contrast: 108, saturation: 115, warmth: 25, sharpness: 5 } },
+  { name: "Clean", adj: { brightness: 108, contrast: 112, saturation: 95, warmth: -5, sharpness: 20 } },
+  { name: "Luxury", adj: { brightness: 100, contrast: 120, saturation: 105, warmth: 10, sharpness: 15 } },
+  { name: "Cool", adj: { brightness: 105, contrast: 110, saturation: 105, warmth: -20, sharpness: 10 } },
 ]
 
 function buildFilter(adj: Adjustments) {
@@ -263,7 +263,7 @@ function PhotoEditor({ url, onSave, onClose }: PhotoEditorProps) {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={url} alt={p.name} className="w-full aspect-square object-cover" style={{ filter: buildFilter(p.adj) }} />
                   <div className="absolute bottom-0 inset-x-0 bg-black/50 text-white text-[10px] font-medium py-0.5 text-center">
-                    {p.emoji} {p.name}
+                    {p.name}
                   </div>
                 </button>
               ))}
@@ -408,6 +408,8 @@ export function PhotoManager({ photos, onChange }: PhotoManagerProps) {
   const [meta, setMeta] = useState<Record<string, { originalSize: number; compressedSize: number }>>({})
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null)
   const [editingUrl, setEditingUrl] = useState<string | null>(null)
+  const [dupAlert, setDupAlert] = useState<string | null>(null)
+  const uploadedFingerprints = useRef<Set<string>>(new Set())
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
@@ -415,35 +417,79 @@ export function PhotoManager({ photos, onChange }: PhotoManagerProps) {
     const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/"))
     if (!imageFiles.length) return
 
+    // Duplicate detection — fingerprint = name + size + lastModified
+    const duplicates: string[] = []
+    const unique = imageFiles.filter((f) => {
+      const fp = `${f.name}:${f.size}:${f.lastModified}`
+      if (uploadedFingerprints.current.has(fp)) {
+        duplicates.push(f.name)
+        return false
+      }
+      return true
+    })
+
+    if (duplicates.length > 0) {
+      setDupAlert(
+        duplicates.length === 1
+          ? `"${duplicates[0]}" was already added.`
+          : `${duplicates.length} photos were already added: ${duplicates.join(", ")}.`
+      )
+      setTimeout(() => setDupAlert(null), 5000)
+    }
+
+    if (!unique.length) return
+
+    const BATCH_SIZE = 4
     setUploading(true)
     setProgress({ current: 0, total: imageFiles.length })
 
     const newMeta: Record<string, { originalSize: number; compressedSize: number }> = {}
+    const allUrls: string[] = []
+    let done = 0
 
     try {
+      // Compress all first, updating progress as each finishes
       const compressed = await Promise.all(
-        imageFiles.map(async (file, i) => {
+        unique.map(async (file) => {
           const c = await compressImage(file)
-          setProgress({ current: i + 1, total: imageFiles.length })
+          done++
+          setProgress({ current: done, total: unique.length })
           return { original: file, compressed: c }
         })
       )
 
-      const fd = new FormData()
-      compressed.forEach(({ compressed: c }) => fd.append("files", c))
+      // Upload in batches of BATCH_SIZE to stay within Vercel's 4.5 MB body limit
+      done = 0
+      setProgress({ current: 0, total: unique.length })
+      for (let i = 0; i < compressed.length; i += BATCH_SIZE) {
+        const batch = compressed.slice(i, i + BATCH_SIZE)
+        const fd = new FormData()
+        batch.forEach(({ compressed: c }) => fd.append("files", c))
 
-      const res = await fetch("/api/upload", { method: "POST", body: fd })
-      const data = await res.json()
+        const res = await fetch("/api/upload", { method: "POST", body: fd })
+        const data = await res.json()
 
-      if (data.urls) {
-        data.urls.forEach((url: string, i: number) => {
-          newMeta[url] = {
-            originalSize: compressed[i].original.size,
-            compressedSize: compressed[i].compressed.size,
-          }
+        if (data.urls) {
+          data.urls.forEach((url: string, j: number) => {
+            newMeta[url] = {
+              originalSize: batch[j].original.size,
+              compressedSize: batch[j].compressed.size,
+            }
+            allUrls.push(url)
+          })
+        }
+
+        done += batch.length
+        setProgress({ current: done, total: unique.length })
+      }
+
+      if (allUrls.length) {
+        // Register fingerprints so same files can't be added again
+        unique.forEach((f) => {
+          uploadedFingerprints.current.add(`${f.name}:${f.size}:${f.lastModified}`)
         })
         setMeta((prev) => ({ ...prev, ...newMeta }))
-        onChange([...photos, ...data.urls])
+        onChange([...photos, ...allUrls])
       }
     } finally {
       setUploading(false)
@@ -475,6 +521,16 @@ export function PhotoManager({ photos, onChange }: PhotoManagerProps) {
 
   return (
     <div className="space-y-4">
+      {dupAlert && (
+        <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-3 rounded-xl">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+          <span><strong>Duplicate photo skipped:</strong> {dupAlert}</span>
+          <button onClick={() => setDupAlert(null)} className="ml-auto text-amber-500 hover:text-amber-700 flex-shrink-0">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {editingUrl && (
         <PhotoEditor
           url={editingUrl}
@@ -521,7 +577,7 @@ export function PhotoManager({ photos, onChange }: PhotoManagerProps) {
               {photos.length > 0 ? "Add more photos" : "Drop photos here or click to upload"}
             </p>
             <p className="text-xs text-slate-400 mt-1">
-              Auto-compressed · Hover photo to enhance ✨ · Add up to 10 for Instagram carousel
+              Auto-compressed · Hover photo to enhance · Add up to 10 for Instagram carousel
             </p>
           </>
         )}

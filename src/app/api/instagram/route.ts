@@ -37,7 +37,7 @@ ${property.description ? `Description: ${property.description.slice(0, 200)}` : 
 
 Plain text only — NO markdown, NO asterisks (*), NO bold (**), NO headers (#).
 Use emojis naturally within the text to highlight features.
-End with: 📞 Contact us for viewing | DM for details
+End with: Contact us for viewing | DM for details
 Add 10-15 relevant hashtags on the last line: #QatarRealEstate #Doha #Qatar and location-specific ones.`,
     }],
   })

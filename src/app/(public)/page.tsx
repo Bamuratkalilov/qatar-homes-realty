@@ -107,7 +107,7 @@ export default async function HomePage() {
                 { v: total > 0 ? `${total}+` : "500+", l: "Active Listings" },
                 { v: "200+", l: "Happy Clients"       },
                 { v: "50+",  l: "Districts Covered"   },
-                { v: "5★",   l: "Client Rating"       },
+                { v: "5/5",  l: "Client Rating"       },
               ].map(({ v, l }) => (
                 <div key={l} className="flex items-center gap-2">
                   <span className="font-bold text-white text-base">{v}</span>

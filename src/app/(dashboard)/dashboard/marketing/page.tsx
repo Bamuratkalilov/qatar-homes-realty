@@ -205,32 +205,32 @@ export default function MarketingPage() {
               {
                 key: "new_lead",
                 label: "New Lead Response",
-                text: "Hello! Thank you for your interest in our properties. My name is [Your Name] from Qatar Homes Realty. I'd be happy to help you find the perfect property in Qatar. Could you tell me more about what you're looking for? 🏠",
+                text: "Hello! Thank you for your interest in our properties. My name is [Your Name] from Qatar Homes Realty. I'd be happy to help you find the perfect property in Qatar. Could you tell me more about what you're looking for?",
               },
               {
                 key: "viewing_confirm",
                 label: "Viewing Confirmation",
-                text: "Dear [Name], this is to confirm your property viewing scheduled for [Date] at [Time]. The property is located at [Address]. Please feel free to call me at [Phone] if you need directions or have any questions. Looking forward to seeing you! 📍",
+                text: "Dear [Name], this is to confirm your property viewing scheduled for [Date] at [Time]. The property is located at [Address]. Please feel free to call me at [Phone] if you need directions or have any questions. Looking forward to seeing you!",
               },
               {
                 key: "follow_up",
                 label: "Post-Viewing Follow-up",
-                text: "Hi [Name], it was a pleasure showing you the property today! I hope it met your expectations. Do you have any questions or would you like to schedule a second viewing? I'm also available to discuss the contract terms if you're interested. 🤝",
+                text: "Hi [Name], it was a pleasure showing you the property today! I hope it met your expectations. Do you have any questions or would you like to schedule a second viewing? I'm also available to discuss the contract terms if you're interested.",
               },
               {
                 key: "new_listing",
                 label: "New Listing Alert",
-                text: "Hi [Name]! I have a new property that matches your requirements perfectly. It's a [BR] bedroom [Type] in [District], priced at QAR [Price]/month. It just became available today. Would you like to arrange a viewing this week? 🌟",
+                text: "Hi [Name]! I have a new property that matches your requirements perfectly. It's a [BR] bedroom [Type] in [District], priced at QAR [Price]/month. It just became available today. Would you like to arrange a viewing this week?",
               },
               {
                 key: "price_drop",
                 label: "Price Reduction",
-                text: "Great news [Name]! The landlord of the property you viewed has reduced the price to QAR [New Price]/month. This is a limited offer. Would you like to move forward? I can arrange the paperwork quickly. 💡",
+                text: "Great news [Name]! The landlord of the property you viewed has reduced the price to QAR [New Price]/month. This is a limited offer. Would you like to move forward? I can arrange the paperwork quickly.",
               },
               {
                 key: "document_reminder",
                 label: "Document Reminder",
-                text: "Hi [Name], just a friendly reminder that we need the following documents to proceed: QID copy, salary certificate/bank statement, and passport copy. Please WhatsApp them to me at your earliest convenience. Thank you! 📋",
+                text: "Hi [Name], just a friendly reminder that we need the following documents to proceed: QID copy, salary certificate/bank statement, and passport copy. Please WhatsApp them to me at your earliest convenience. Thank you!",
               },
             ].map(({ key, label, text }) => (
               <div key={key} className="bg-slate-50 border border-slate-200 rounded-xl p-3">

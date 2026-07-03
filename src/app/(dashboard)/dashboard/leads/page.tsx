@@ -45,9 +45,9 @@ const PIPELINE_STAGES = [
 ]
 
 const SOURCE_ICONS: Record<string, string> = {
-  WEBSITE: "🌐", PHONE: "📞", REFERRAL: "🤝", SOCIAL_MEDIA: "📱",
-  TIKTOK: "🎵", WHATSAPP: "💬",
-  PROPERTY_FINDER: "🔍", BAYUT: "🏠", WALK_IN: "🚶", OTHER: "💼",
+  WEBSITE: "Web", PHONE: "Ph", REFERRAL: "Ref", SOCIAL_MEDIA: "Soc",
+  TIKTOK: "TT", WHATSAPP: "WA",
+  PROPERTY_FINDER: "PF", BAYUT: "Bay", WALK_IN: "Walk", OTHER: "–",
 }
 
 function scoreColor(s: number) {
@@ -150,7 +150,7 @@ function LeadPopup({ lead, position, onClose, onExpand }: {
                   "absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center text-[9px] font-bold",
                   sc.bg, sc.text
                 )}>
-                  {lead.score >= 70 ? "🔥" : lead.score >= 40 ? "⚡" : "❄️"}
+                  {lead.score >= 70 ? "H" : lead.score >= 40 ? "W" : "C"}
                 </div>
               )}
             </div>
