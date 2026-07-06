@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select } from "@/components/ui/select"
-import { RESIDENTIAL_TYPES, COMMERCIAL_TYPES, QATAR_DISTRICTS, cn } from "@/lib/utils"
-import { Wand2, Save, ArrowLeft, RefreshCw, Globe, AlertCircle, MapPin, ImageIcon } from "lucide-react"
+import { RESIDENTIAL_TYPES, COMMERCIAL_TYPES, QATAR_LOCATIONS, cn } from "@/lib/utils"
+import { Wand2, Save, ArrowLeft, RefreshCw, Globe, AlertCircle, MapPin, ImageIcon, Copy, Check } from "lucide-react"
 import dynamic from "next/dynamic"
 import { PhotoManager } from "@/components/properties/photo-manager"
 import {
@@ -31,6 +31,7 @@ export default function NewPropertyPage() {
   const [postToInstagram, setPostToInstagram] = useState(false)
   const [igStatus, setIgStatus] = useState<"idle" | "posting" | "done" | "error">("idle")
   const [igError, setIgError] = useState<string | null>(null)
+  const [descCopied, setDescCopied] = useState(false)
 
   const [form, setForm] = useState({
     title: "",
@@ -46,6 +47,7 @@ export default function NewPropertyPage() {
     floor: "",
     address: "",
     district: "",
+    subDistrict: "",
     description: "",
     furnishing: "" as "" | "FURNISHED" | "SEMI_FURNISHED" | "UNFURNISHED",
     availabilityType: "IMMEDIATE" as "IMMEDIATE" | "DATE",
@@ -60,7 +62,9 @@ export default function NewPropertyPage() {
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
   const [coordinates, setCoordinates] = useState<{ lat: number; lng: number } | null>(null)
   const [draftStatus, setDraftStatus] = useState<"idle" | "saving" | "saved" | "restored">("idle")
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const saveTimer    = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const dbSaveTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const dbDraftId    = useRef<string | null>(null)
 
   const DRAFT_KEY = "property_draft"
 
@@ -70,11 +74,12 @@ export default function NewPropertyPage() {
     if (saved) {
       try {
         const draft = JSON.parse(saved)
-        if (draft.form) setForm({ ...draft.form, referenceNumber: generateRef() })
-        if (draft.amenities) setAmenities(draft.amenities)
-        if (draft.utilities) setUtilities(draft.utilities)
-        if (draft.photos) setPhotos(draft.photos)
+        if (draft.form)        setForm({ ...draft.form, referenceNumber: generateRef() })
+        if (draft.amenities)   setAmenities(draft.amenities)
+        if (draft.utilities)   setUtilities(draft.utilities)
+        if (draft.photos)      setPhotos(draft.photos)
         if (draft.coordinates) setCoordinates(draft.coordinates)
+        if (draft.dbDraftId)   dbDraftId.current = draft.dbDraftId
         return
       } catch { /* fall through */ }
     }
@@ -82,23 +87,82 @@ export default function NewPropertyPage() {
     setForm((f) => ({ ...f, referenceNumber: generateRef() }))
   }, [])
 
-  // Auto-save on every change (debounced 800ms)
+  // Auto-save: localStorage immediately + DB save after 3s if title exists
   useEffect(() => {
-    if (saveTimer.current) clearTimeout(saveTimer.current)
+    if (saveTimer.current)   clearTimeout(saveTimer.current)
+    if (dbSaveTimer.current) clearTimeout(dbSaveTimer.current)
     setDraftStatus("saving")
+
+    // localStorage (fast — always)
     saveTimer.current = setTimeout(() => {
       try {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({ form, amenities, utilities, photos, coordinates }))
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ form, amenities, utilities, photos, coordinates, dbDraftId: dbDraftId.current }))
         setDraftStatus("saved")
-      } catch {
-        setDraftStatus("idle")
-      }
+      } catch { setDraftStatus("idle") }
     }, 800)
-    return () => { if (saveTimer.current) clearTimeout(saveTimer.current) }
+
+    // DB save (slower — only when title is filled)
+    if (form.title.trim()) {
+      dbSaveTimer.current = setTimeout(async () => {
+        const payload = {
+          title:            form.title.trim(),
+          category:         form.category,
+          type:             form.type,
+          listingType:      form.listingType,
+          rentFrequency:    form.rentFrequency,
+          price:            parseFloat(form.price) || 0,
+          area:             parseFloat(form.area)  || 0,
+          bedrooms:         form.bedrooms  ? parseInt(form.bedrooms)  : undefined,
+          bathrooms:        form.bathrooms ? parseInt(form.bathrooms) : undefined,
+          floor:            form.floor     ? parseInt(form.floor)     : undefined,
+          address:          form.address,
+          district:         form.district,
+          subDistrict:      form.subDistrict,
+          description:      form.description,
+          furnishing:       form.furnishing || undefined,
+          availabilityType: form.availabilityType,
+          availableFrom:    form.availabilityType === "DATE" && form.availableFrom ? new Date(form.availableFrom).toISOString() : undefined,
+          amenities,
+          photos,
+          utilityBillsIncluded: utilities.length > 0,
+          coordinates:      coordinates ? { lat: coordinates.lat, lng: coordinates.lng } : undefined,
+          status:           "OFF_MARKET",
+          featured:         form.featured,
+        }
+        try {
+          if (dbDraftId.current) {
+            // PATCH existing draft
+            await fetch(`/api/properties/${dbDraftId.current}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            })
+          } else {
+            // CREATE new draft
+            const res = await fetch("/api/properties", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            })
+            const data = await res.json()
+            if (res.ok && data.property?.id) {
+              dbDraftId.current = data.property.id
+              localStorage.setItem(DRAFT_KEY, JSON.stringify({ form, amenities, utilities, photos, coordinates, dbDraftId: data.property.id }))
+            }
+          }
+        } catch { /* silent — localStorage still has it */ }
+      }, 3000)
+    }
+
+    return () => {
+      if (saveTimer.current)   clearTimeout(saveTimer.current)
+      if (dbSaveTimer.current) clearTimeout(dbSaveTimer.current)
+    }
   }, [form, amenities, utilities, photos, coordinates])
 
   function clearDraft() {
     localStorage.removeItem(DRAFT_KEY)
+    dbDraftId.current = null
   }
 
   // Check if the user has entered anything worth saving
@@ -113,33 +177,36 @@ export default function NewPropertyPage() {
   }
 
   async function saveAndLeave() {
-    if (!form.title.trim()) {
-      // No title — can't save to DB, just leave
-      router.push("/dashboard/properties")
+    if (!form.title.trim() && !dbDraftId.current) {
+      // Nothing worth saving
+      clearDraft()
+      router.back()
       return
     }
+    const payload = {
+      ...form,
+      status: "OFF_MARKET",
+      price: parseFloat(form.price) || 0,
+      area: parseFloat(form.area) || 0,
+      bedrooms: form.bedrooms ? parseInt(form.bedrooms) : undefined,
+      bathrooms: form.bathrooms ? parseInt(form.bathrooms) : undefined,
+      floor: form.floor ? parseInt(form.floor) : undefined,
+      amenities,
+      photos,
+      utilityBillsIncluded: utilities.length > 0,
+      coordinates: coordinates ? { lat: coordinates.lat, lng: coordinates.lng } : undefined,
+      availableFrom: form.availabilityType === "DATE" && form.availableFrom ? new Date(form.availableFrom).toISOString() : undefined,
+      furnishing: form.furnishing || undefined,
+    }
     try {
-      await fetch("/api/properties", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          status: "OFF_MARKET",
-          price: parseFloat(form.price) || 0,
-          area: parseFloat(form.area) || 0,
-          bedrooms: form.bedrooms ? parseInt(form.bedrooms) : undefined,
-          bathrooms: form.bathrooms ? parseInt(form.bathrooms) : undefined,
-          floor: form.floor ? parseInt(form.floor) : undefined,
-          amenities,
-          photos,
-          utilityBillsIncluded: utilities.length > 0,
-          coordinates: coordinates ? { lat: coordinates.lat, lng: coordinates.lng } : undefined,
-          availableFrom: form.availabilityType === "DATE" && form.availableFrom ? new Date(form.availableFrom).toISOString() : undefined,
-          furnishing: form.furnishing || undefined,
-        }),
-      })
+      if (dbDraftId.current) {
+        await fetch(`/api/properties/${dbDraftId.current}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+      } else {
+        await fetch("/api/properties", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+      }
     } catch { /* ignore — just leave */ }
-    router.push("/dashboard/properties")
+    clearDraft()
+    router.back()
   }
 
   function update<K extends keyof typeof form>(key: K, value: typeof form[K]) {
@@ -179,6 +246,10 @@ export default function NewPropertyPage() {
   }
 
   async function submit(status: "OFF_MARKET" | "AVAILABLE") {
+    // Stop auto-save timers immediately so they can't race with the publish PATCH
+    if (saveTimer.current)   clearTimeout(saveTimer.current)
+    if (dbSaveTimer.current) clearTimeout(dbSaveTimer.current)
+
     const errs: Record<string, string> = {}
 
     if (!form.price || parseFloat(form.price) <= 0) errs.pricing = "Price required"
@@ -186,8 +257,10 @@ export default function NewPropertyPage() {
     if (!form.furnishing)                            errs.availability = "Select furnishing"
     if (photos.length < 3)                           errs.photos = `Add at least 3 photos (${photos.length}/3)`
     if (!form.title.trim())                          errs.titleDesc = "Title required"
+    else if (form.title.trim().length < 40)          errs.titleDesc = `Title too short (${form.title.trim().length}/40 min)`
+    else if (form.title.trim().length > 100)         errs.titleDesc = `Title too long (${form.title.trim().length}/100 max)`
     if (!form.description.trim())                    errs.titleDesc = (errs.titleDesc ? errs.titleDesc + " · " : "") + "Description required"
-    if (!form.address.trim())                        errs.location = "Address required"
+    if (!form.district.trim())                        errs.location = "Select an area"
 
     setFieldErrors(errs)
     if (Object.keys(errs).length > 0) {
@@ -201,26 +274,25 @@ export default function NewPropertyPage() {
     setError(null)
     setFieldErrors({})
     setLoading(status === "OFF_MARKET" ? "draft" : "publish")
+    const submitPayload = {
+      ...form,
+      status,
+      price: parseFloat(form.price),
+      area: parseFloat(form.area),
+      bedrooms: form.bedrooms ? parseInt(form.bedrooms) : undefined,
+      bathrooms: form.bathrooms ? parseInt(form.bathrooms) : undefined,
+      floor: form.floor ? parseInt(form.floor) : undefined,
+      amenities,
+      photos,
+      utilityBillsIncluded: utilities.length > 0,
+      coordinates: coordinates ? { lat: coordinates.lat, lng: coordinates.lng } : undefined,
+      availableFrom: form.availabilityType === "DATE" && form.availableFrom ? new Date(form.availableFrom).toISOString() : undefined,
+      furnishing: form.furnishing || undefined,
+    }
     try {
-      const res = await fetch("/api/properties", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          status,
-          price: parseFloat(form.price),
-          area: parseFloat(form.area),
-          bedrooms: form.bedrooms ? parseInt(form.bedrooms) : undefined,
-          bathrooms: form.bathrooms ? parseInt(form.bathrooms) : undefined,
-          floor: form.floor ? parseInt(form.floor) : undefined,
-          amenities,
-          photos,
-          utilityBillsIncluded: utilities.length > 0,
-          coordinates: coordinates ? { lat: coordinates.lat, lng: coordinates.lng } : undefined,
-          availableFrom: form.availabilityType === "DATE" && form.availableFrom ? new Date(form.availableFrom).toISOString() : undefined,
-          furnishing: form.furnishing || undefined,
-        }),
-      })
+      const res = dbDraftId.current
+        ? await fetch(`/api/properties/${dbDraftId.current}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(submitPayload) })
+        : await fetch("/api/properties", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(submitPayload) })
       const data = await res.json()
       if (res.ok) {
         clearDraft()
@@ -511,22 +583,53 @@ export default function NewPropertyPage() {
               <div data-section-error={fieldErrors.titleDesc ? true : undefined}>
               <SectionCard title="Title & Description" error={fieldErrors.titleDesc}>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Property Title *</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-sm font-medium text-slate-700">Property Title *</label>
+                    <span className={`text-xs font-medium ${
+                      form.title.length === 0 ? "text-slate-400"
+                      : form.title.length < 40 ? "text-amber-500"
+                      : form.title.length > 100 ? "text-red-500"
+                      : "text-green-600"
+                    }`}>
+                      {form.title.length}/100
+                    </span>
+                  </div>
                   <Input
                     value={form.title}
-                    onChange={(e) => update("title", e.target.value)}
+                    onChange={(e) => update("title", e.target.value.slice(0, 100))}
                     placeholder="e.g. Luxury 3BR Apartment with Sea View in The Pearl"
                     required
                     className="text-base"
                   />
+                  {form.title.length > 0 && form.title.length < 40 && (
+                    <p className="text-xs text-amber-500 mt-1">{40 - form.title.length} more characters needed</p>
+                  )}
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-sm font-medium text-slate-700">Description</label>
-                    <Button type="button" variant="outline" size="sm" onClick={generateDescription} disabled={aiLoading} className="gap-2">
-                      <Wand2 className="w-3.5 h-3.5" />
-                      {aiLoading ? "Generating..." : "AI Generate"}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      {form.description && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          onClick={() => {
+                            navigator.clipboard.writeText(form.description)
+                            setDescCopied(true)
+                            setTimeout(() => setDescCopied(false), 2000)
+                          }}
+                        >
+                          {descCopied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          {descCopied ? "Copied!" : "Copy"}
+                        </Button>
+                      )}
+                      <Button type="button" variant="outline" size="sm" onClick={generateDescription} disabled={aiLoading} className="gap-2">
+                        <Wand2 className="w-3.5 h-3.5" />
+                        {aiLoading ? "Generating..." : "AI Generate"}
+                      </Button>
+                    </div>
                   </div>
                   <Textarea
                     value={form.description}
@@ -538,54 +641,76 @@ export default function NewPropertyPage() {
               </SectionCard>
               </div>
 
-              {/* 9. Location — at the end as requested */}
+              {/* 9. Location */}
               <div data-section-error={fieldErrors.location ? true : undefined}>
               <SectionCard title="Location" error={fieldErrors.location}>
-                {/* Map picker button */}
+                {/* Map pin button */}
                 <button
                   type="button"
                   onClick={() => setShowMap(true)}
                   className={cn(
                     "w-full flex items-center gap-3 p-4 rounded-xl border-2 border-dashed transition-all text-left",
-                    coordinates
-                      ? "border-blue-300 bg-blue-50"
-                      : "border-slate-200 hover:border-blue-300 hover:bg-slate-50"
+                    coordinates ? "border-blue-300 bg-blue-50" : "border-slate-200 hover:border-blue-300 hover:bg-slate-50"
                   )}
                 >
-                  <div className={cn(
-                    "w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0",
-                    coordinates ? "bg-blue-600" : "bg-slate-100"
-                  )}>
+                  <div className={cn("w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0", coordinates ? "bg-blue-600" : "bg-slate-100")}>
                     <MapPin className={cn("w-4 h-4", coordinates ? "text-white" : "text-slate-400")} />
                   </div>
                   <div className="flex-1 min-w-0">
                     {coordinates ? (
                       <>
                         <p className="text-sm font-semibold text-blue-700">Location pinned on map</p>
-                        <p className="text-xs text-slate-500 truncate">
-                          {form.address || `${coordinates.lat.toFixed(5)}, ${coordinates.lng.toFixed(5)}`}
-                        </p>
+                        <p className="text-xs text-slate-500">{coordinates.lat.toFixed(5)}, {coordinates.lng.toFixed(5)}</p>
                       </>
                     ) : (
                       <>
-                        <p className="text-sm font-semibold text-slate-700">Pick location on map</p>
-                        <p className="text-xs text-slate-400">Click to open Mapbox and pin the exact location</p>
+                        <p className="text-sm font-semibold text-slate-700">Pin on map (optional)</p>
+                        <p className="text-xs text-slate-400">Click to open Mapbox and set exact coordinates</p>
                       </>
                     )}
                   </div>
-                  <span className="text-xs font-semibold text-blue-600 flex-shrink-0">
-                    {coordinates ? "Change" : "Open Map →"}
-                  </span>
+                  <span className="text-xs font-semibold text-blue-600 flex-shrink-0">{coordinates ? "Change" : "Open Map →"}</span>
                 </button>
 
+                {/* Main area */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Address *</label>
-                  <Input value={form.address} onChange={(e) => update("address", e.target.value)} placeholder="e.g. Porto Arabia, The Pearl-Qatar — auto-filled from map" required />
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Area *</label>
+                  <select
+                    value={form.district}
+                    onChange={(e) => {
+                      update("district", e.target.value)
+                      update("subDistrict", "") // reset sub-area when area changes
+                    }}
+                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">Select area…</option>
+                    {QATAR_LOCATIONS.map((l) => (
+                      <option key={l.area} value={l.area}>{l.area}</option>
+                    ))}
+                  </select>
                 </div>
+
+                {/* Sub-area — only shown when selected area has sub-areas */}
+                {form.district && (QATAR_LOCATIONS.find((l) => l.area === form.district)?.subAreas.length ?? 0) > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Sub Area</label>
+                    <select
+                      value={form.subDistrict}
+                      onChange={(e) => update("subDistrict", e.target.value)}
+                      className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Select sub area…</option>
+                      {QATAR_LOCATIONS.find((l) => l.area === form.district)?.subAreas.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Optional building / street */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">District</label>
-                  <Select value={form.district} onChange={(e) => update("district", e.target.value)} placeholder="Select district"
-                    options={QATAR_DISTRICTS.map((d) => ({ value: d, label: d }))} />
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Building / Street <span className="text-slate-400 font-normal">(optional)</span></label>
+                  <Input value={form.address} onChange={(e) => update("address", e.target.value)} placeholder="e.g. Tower B, Floor 12" />
                 </div>
               </SectionCard>
               </div>
@@ -598,13 +723,15 @@ export default function NewPropertyPage() {
                   initialLng={coordinates?.lng}
                   onSelect={(loc) => {
                     setCoordinates({ lat: loc.latitude, lng: loc.longitude })
-                    update("address", loc.address)
-                    // Try to match district from Qatar districts list
-                    const matched = QATAR_DISTRICTS.find((d) =>
-                      d.toLowerCase().includes(loc.district.toLowerCase()) ||
-                      loc.district.toLowerCase().includes(d.toLowerCase())
+                    // Try to auto-match a main area from the map result
+                    const matched = QATAR_LOCATIONS.find((l) =>
+                      l.area.toLowerCase().includes(loc.district.toLowerCase()) ||
+                      loc.district.toLowerCase().includes(l.area.toLowerCase())
                     )
-                    if (matched) update("district", matched)
+                    if (matched) {
+                      update("district", matched.area)
+                      update("subDistrict", "")
+                    }
                     setShowMap(false)
                   }}
                 />

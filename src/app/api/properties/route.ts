@@ -49,7 +49,6 @@ export async function POST(req: NextRequest) {
     if (!isDraft) {
       if (!body.price || isNaN(Number(body.price))) return NextResponse.json({ error: "Valid price is required" }, { status: 400 })
       if (!body.area || isNaN(Number(body.area))) return NextResponse.json({ error: "Valid area is required" }, { status: 400 })
-      if (!body.address?.trim()) return NextResponse.json({ error: "Address is required" }, { status: 400 })
     }
 
     // Resolve agent ID — handle demo session or stale JWT
