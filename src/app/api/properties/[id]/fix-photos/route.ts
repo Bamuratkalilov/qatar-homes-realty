@@ -9,8 +9,6 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 })
 
-export const maxDuration = 120
-
 async function resolveAgentId(sessionId: string, email: string) {
   if (sessionId !== "demo-agent") {
     const exists = await db.user.findUnique({ where: { id: sessionId }, select: { id: true } })
@@ -20,36 +18,19 @@ async function resolveAgentId(sessionId: string, email: string) {
   return user?.id ?? null
 }
 
+// Cloudinary fetches the URL on their own servers — nothing is downloaded on Vercel
 async function uploadToCloudinary(url: string): Promise<string> {
-  const controller = new AbortController()
-  const t = setTimeout(() => controller.abort(), 25000)
-  try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-        "Referer": "https://www.propertyfinder.qa/",
-        Accept: "image/*,*/*;q=0.8",
-      },
-    })
-    if (!res.ok) return url
-    const buffer = Buffer.from(await res.arrayBuffer())
-    return await new Promise<string>((resolve) => {
-      cloudinary.uploader.upload_stream(
-        { folder: "qatar-homes/properties", resource_type: "image", transformation: [{ quality: "auto:best", fetch_format: "auto" }] },
-        (err, result) => resolve(result?.secure_url ?? url)
-      ).end(buffer)
-    })
-  } catch {
-    return url
-  } finally {
-    clearTimeout(t)
-  }
+  const result = await cloudinary.uploader.upload(url, {
+    folder: "qatar-homes/properties",
+    resource_type: "image",
+  })
+  return result.secure_url
 }
 
 // POST /api/properties/[id]/fix-photos
-// Re-uploads any non-Cloudinary photos to Cloudinary and saves the new URLs to DB
-export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+// Body: { url: string }  → upload one photo to Cloudinary, save to DB, return cloudinaryUrl
+// Body: {}               → batch: upload all non-Cloudinary photos in parallel
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -62,14 +43,29 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     if (!property) return NextResponse.json({ error: "Not found" }, { status: 404 })
     if (property.agentId !== agentId) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
+    // Single-URL mode: process one photo at a time (called sequentially from the edit page)
+    let singleUrl: string | null = null
+    try { const body = await req.json(); singleUrl = body?.url ?? null } catch { /* no body = batch mode */ }
+
+    if (singleUrl) {
+      if (singleUrl.startsWith("https://res.cloudinary.com")) {
+        return NextResponse.json({ cloudinaryUrl: singleUrl, photos: property.photos })
+      }
+      const cloudinaryUrl = await uploadToCloudinary(singleUrl)
+      const updatedPhotos = property.photos.map(p => p === singleUrl ? cloudinaryUrl : p)
+      await db.property.update({ where: { id }, data: { photos: updatedPhotos } })
+      return NextResponse.json({ cloudinaryUrl, photos: updatedPhotos })
+    }
+
+    // Batch mode: upload all non-Cloudinary photos in parallel
     const externalPhotos = property.photos.filter(u => !u.startsWith("https://res.cloudinary.com"))
     if (externalPhotos.length === 0) return NextResponse.json({ photos: property.photos })
 
-    // Re-upload all non-Cloudinary photos in parallel
     const fixed = await Promise.all(
-      property.photos.map(url =>
-        url.startsWith("https://res.cloudinary.com") ? Promise.resolve(url) : uploadToCloudinary(url)
-      )
+      property.photos.map(async (url) => {
+        if (url.startsWith("https://res.cloudinary.com")) return url
+        try { return await uploadToCloudinary(url) } catch { return url }
+      })
     )
 
     await db.property.update({ where: { id }, data: { photos: fixed } })

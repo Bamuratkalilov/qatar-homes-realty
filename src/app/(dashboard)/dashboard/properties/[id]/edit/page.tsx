@@ -44,6 +44,7 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
   const [descCopied, setDescCopied] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [fixProgress, setFixProgress] = useState<{ done: number; total: number } | null>(null)
 
   async function postToInstagram() {
     if (!photos.length) { setIgStatus("error"); setIgMessage("Add at least one photo first"); return }
@@ -65,9 +66,10 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
 
   // Load existing property
   useEffect(() => {
-    fetch(`/api/properties/${id}`)
-      .then((r) => r.json())
-      .then(({ property, error: err }) => {
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/properties/${id}`)
+        const { property, error: err } = await res.json()
         if (err || !property) { setError(err || "Property not found"); setPageLoading(false); return }
         const p = property
         setForm({
@@ -96,22 +98,41 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
         const loadedPhotos: string[] = p.photos ?? []
         setPhotos(loadedPhotos)
 
-        // Auto-fix: if any photos are not on Cloudinary, silently re-upload them
-        const hasExternal = loadedPhotos.some(u => !u.startsWith("https://res.cloudinary.com"))
-        if (hasExternal) {
-          fetch(`/api/properties/${p.id}/fix-photos`, { method: "POST" })
-            .then(r => r.json())
-            .then(data => { if (data.photos) setPhotos(data.photos) })
-            .catch(() => {/* ignore — photos stay as-is */})
-        }
-
         if (p.coordinates && typeof p.coordinates === "object") {
           const c = p.coordinates as { lat?: number; lng?: number }
           if (c.lat && c.lng) setCoordinates({ lat: c.lat, lng: c.lng })
         }
         setPageLoading(false)
-      })
-      .catch(() => { setError("Failed to load property"); setPageLoading(false) })
+
+        // Auto-fix: migrate non-Cloudinary photos one at a time (Cloudinary fetches them on their servers)
+        const externalUrls = loadedPhotos.filter((u: string) => !u.startsWith("https://res.cloudinary.com"))
+        if (externalUrls.length > 0) {
+          setFixProgress({ done: 0, total: externalUrls.length })
+          let currentPhotos = [...loadedPhotos]
+          let done = 0
+          for (const url of externalUrls) {
+            try {
+              const r = await fetch(`/api/properties/${p.id}/fix-photos`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url }),
+              })
+              const data = await r.json()
+              if (data.cloudinaryUrl) {
+                currentPhotos = currentPhotos.map((u: string) => u === url ? data.cloudinaryUrl : u)
+                setPhotos([...currentPhotos])
+              }
+            } catch { /* keep original url on failure */ }
+            done++
+            setFixProgress({ done, total: externalUrls.length })
+          }
+          setFixProgress(null)
+        }
+      } catch {
+        setError("Failed to load property")
+        setPageLoading(false)
+      }
+    })()
   }, [id])
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -261,6 +282,22 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           <span className="flex-1">{error}</span>
           <button type="button" onClick={() => setError(null)} className="text-red-400 hover:text-red-600">✕</button>
+        </div>
+      )}
+
+      {fixProgress && (
+        <div className="mx-6 mt-4 flex items-center gap-3 bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-xl text-sm">
+          <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
+          <div className="flex-1">
+            <span className="font-medium">Saving photos to our server...</span>
+            <span className="text-blue-500 ml-2">{fixProgress.done}/{fixProgress.total} done</span>
+          </div>
+          <div className="w-28 bg-blue-200 rounded-full h-1.5 flex-shrink-0">
+            <div
+              className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+              style={{ width: `${Math.round((fixProgress.done / fixProgress.total) * 100)}%` }}
+            />
+          </div>
         </div>
       )}
 
