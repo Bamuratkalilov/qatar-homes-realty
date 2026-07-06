@@ -6,11 +6,11 @@ import { useRouter } from "next/navigation"
 import { Header } from "@/components/dashboard/header"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { formatPrice, formatArea, PROPERTY_TYPES, cn } from "@/lib/utils"
+import { formatPrice, formatArea, PROPERTY_TYPES, cn, timeAgo } from "@/lib/utils"
 import {
   Plus, Eye, Edit, Bed, Bath, Maximize, MapPin, Search,
   LayoutGrid, List, SlidersHorizontal, X, ChevronDown,
-  Loader2, PenLine, ArrowUpDown, Link2, Trash2,
+  Loader2, PenLine, ArrowUpDown, Link2, Trash2, Archive, RotateCcw,
 } from "lucide-react"
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -21,6 +21,8 @@ interface Property {
   furnishing: string | null; utilityBillsIncluded: boolean; featured: boolean
   referenceNumber: string | null; availabilityType: string; createdAt: string
 }
+
+interface BinProperty extends Property { deletedAt: string }
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const STATUS_OPTIONS = [
@@ -269,6 +271,17 @@ export default function PropertiesPage() {
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 12
 
+  // Restore page position when returning from edit/delete
+  useEffect(() => {
+    try {
+      const saved = parseInt(sessionStorage.getItem("properties_page") || "1")
+      if (saved > 1) setPage(saved)
+    } catch { /* ignore */ }
+  }, [])
+  useEffect(() => {
+    try { sessionStorage.setItem("properties_page", String(page)) } catch { /* ignore */ }
+  }, [page])
+
   const [filters, setFilters] = useState({
     listingType: "", category: "", type: "", status: "",
     furnishing: "", utilities: false, priceMin: "", priceMax: "",
@@ -312,6 +325,7 @@ export default function PropertiesPage() {
     setImportLoading(true)
     setImportError("")
     try {
+      // Step 1: extract data from URL / text
       const res = await fetch("/api/import-property", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -321,33 +335,42 @@ export default function PropertiesPage() {
       if (!res.ok) { setImportError(json.error || "Import failed"); return }
 
       const d = json.data
-      const draft = {
-        form: {
-          title: d.title || "",
-          category: d.category || "RESIDENTIAL",
-          type: d.type || "APARTMENT",
-          listingType: d.listingType || "RENT",
-          referenceNumber: "",
-          price: d.price ? String(d.price) : "",
-          area: d.area ? String(Math.round(d.area)) : "",
-          bedrooms: d.bedrooms != null ? String(d.bedrooms) : "",
-          bathrooms: d.bathrooms != null ? String(d.bathrooms) : "",
-          floor: d.floor != null ? String(d.floor) : "",
-          address: d.address || "",
-          district: d.district || "",
-          description: d.description || "",
-          furnishing: d.furnishing || "",
+
+      // Step 2: save straight to DB as a draft so it's visible in the list immediately
+      const createRes = await fetch("/api/properties", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title:            d.title?.trim() || "Imported Property",
+          category:         d.category      || "RESIDENTIAL",
+          type:             d.type          || "APARTMENT",
+          listingType:      d.listingType   || "RENT",
+          rentFrequency:    "MONTHLY",
+          price:            Number(d.price) || 0,
+          area:             d.area ? Math.round(Number(d.area)) : 0,
+          bedrooms:         d.bedrooms  != null ? Number(d.bedrooms)  : undefined,
+          bathrooms:        d.bathrooms != null ? Number(d.bathrooms) : undefined,
+          floor:            d.floor     != null ? Number(d.floor)     : undefined,
+          address:          d.address   || "",
+          district:         d.district  || "",
+          subDistrict:      d.subDistrict || "",
+          description:      d.description || "",
+          furnishing:       d.furnishing  || undefined,
+          amenities:        d.amenities   || [],
+          photos:           d.photos      || [],
           availabilityType: "IMMEDIATE",
-          availableFrom: "",
-          featured: false,
-        },
-        amenities: d.amenities || [],
-        utilities: [],
-        photos: d.photos || [],
-        coordinates: null,
+          status:           "OFF_MARKET",
+        }),
+      })
+      const createData = await createRes.json()
+      if (!createRes.ok || !createData.property?.id) {
+        setImportError(createData.error || "Failed to save imported listing. Try again.")
+        return
       }
-      localStorage.setItem("property_draft", JSON.stringify(draft))
-      router.push("/dashboard/properties/new")
+
+      // Step 3: go straight to the edit page — draft is already in the list
+      setShowImport(false)
+      router.push(`/dashboard/properties/${createData.property.id}/edit`)
     } catch {
       setImportError("Something went wrong. Try again.")
     } finally {
@@ -358,17 +381,57 @@ export default function PropertiesPage() {
   const [igPosting, setIgPosting] = useState<string | null>(null)
   const [igToast, setIgToast] = useState<{ msg: string; ok: boolean } | null>(null)
 
+  // ── Bin ──────────────────────────────────────────────────────────────────
+  const [showBin, setShowBin] = useState(false)
+  const [binProperties, setBinProperties] = useState<BinProperty[]>([])
+  const [binLoading, setBinLoading] = useState(false)
+  const [binToast, setBinToast] = useState<string | null>(null)
+
+  async function loadBin() {
+    setBinLoading(true)
+    const res = await fetch("/api/properties/bin")
+    const json = await res.json()
+    setBinProperties(json.properties || [])
+    setBinLoading(false)
+  }
+
+  function showBinView() { setShowBin(true); loadBin() }
+
   async function handleDelete(id: string) {
-    if (!confirm("Delete this draft? This cannot be undone.")) return
     await fetch(`/api/properties/${id}`, { method: "DELETE" })
     setProperties((prev) => prev.filter((p) => p.id !== id))
+    setBinToast("Moved to bin")
+    setTimeout(() => setBinToast(null), 3000)
   }
 
   async function handleDeleteAllDrafts() {
     const draftList = properties.filter((p) => p.status === "OFF_MARKET")
-    if (!confirm(`Delete all ${draftList.length} draft listings? This cannot be undone.`)) return
+    if (!confirm(`Move all ${draftList.length} drafts to bin?`)) return
     await Promise.all(draftList.map((p) => fetch(`/api/properties/${p.id}`, { method: "DELETE" })))
     setProperties((prev) => prev.filter((p) => p.status !== "OFF_MARKET"))
+    setBinToast(`${draftList.length} drafts moved to bin`)
+    setTimeout(() => setBinToast(null), 3000)
+  }
+
+  async function handleRestore(id: string) {
+    await fetch(`/api/properties/${id}/restore`, { method: "POST" })
+    setBinProperties((prev) => prev.filter((p) => p.id !== id))
+    // refresh active list
+    fetch("/api/properties").then(r => r.json()).then(({ properties: p }) => setProperties(p || []))
+    setBinToast("Property restored")
+    setTimeout(() => setBinToast(null), 3000)
+  }
+
+  async function handleDeletePermanent(id: string) {
+    if (!confirm("Permanently delete? This cannot be undone.")) return
+    await fetch(`/api/properties/${id}?permanent=true`, { method: "DELETE" })
+    setBinProperties((prev) => prev.filter((p) => p.id !== id))
+  }
+
+  async function handleEmptyBin() {
+    if (!confirm(`Permanently delete all ${binProperties.length} items in bin? This cannot be undone.`)) return
+    await fetch("/api/properties/bin", { method: "DELETE" })
+    setBinProperties([])
   }
 
   async function handleInstagramPost(p: Property) {
@@ -462,6 +525,18 @@ export default function PropertiesPage() {
         description={`${properties.filter(p => p.status !== "OFF_MARKET").length} published · ${properties.filter(p => p.status === "OFF_MARKET").length} drafts`}
         actions={
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => showBin ? setShowBin(false) : showBinView()}
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-semibold transition-all",
+                showBin ? "bg-red-600 text-white border-red-600" : "bg-white text-slate-600 border-slate-200 hover:border-red-300 hover:text-red-600"
+              )}
+              title="Bin"
+            >
+              <Archive className="w-4 h-4" />
+              {!showBin && "Bin"}
+              {showBin && "← Back"}
+            </button>
             <Button size="sm" variant="outline" className="gap-2" onClick={() => { setShowXmlImport(true); setXmlFile(null); setXmlResult(null); setXmlError("") }}>
               <Link2 className="w-4 h-4" /> Bulk Import XML
             </Button>
@@ -627,8 +702,91 @@ export default function PropertiesPage() {
           </div>
         )}
 
+        {/* ── Bin view ── */}
+        {showBin && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-slate-900 flex items-center gap-2">
+                  <Archive className="w-4 h-4 text-red-500" />
+                  Bin
+                  {binProperties.length > 0 && (
+                    <span className="text-xs font-semibold bg-red-100 text-red-600 px-2 py-0.5 rounded-full">{binProperties.length}</span>
+                  )}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">Items here are not visible on the website. Restore to bring them back.</p>
+              </div>
+              {binProperties.length > 0 && (
+                <button
+                  onClick={handleEmptyBin}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-red-500 hover:text-red-700 px-3 py-2 rounded-lg hover:bg-red-50 transition border border-red-200"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Empty Bin
+                </button>
+              )}
+            </div>
+
+            {binLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+              </div>
+            ) : binProperties.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-slate-200 p-16 text-center">
+                <Archive className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+                <p className="font-semibold text-slate-500">Bin is empty</p>
+                <p className="text-xs text-slate-400 mt-1">Deleted properties will appear here</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {binProperties.map((p) => (
+                  <div key={p.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden group">
+                    {/* Photo */}
+                    <div className="aspect-[4/3] bg-slate-100 relative overflow-hidden">
+                      {p.photos[0] ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={p.photos[0].startsWith("https://res.cloudinary.com") ? p.photos[0] : `/api/proxy-image?url=${encodeURIComponent(p.photos[0])}`} alt={p.title} className="w-full h-full object-cover opacity-60" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Archive className="w-8 h-8 text-slate-300" />
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-black/20" />
+                      <div className="absolute bottom-2 left-2 text-[10px] font-semibold text-white/80 bg-black/40 px-1.5 py-0.5 rounded">
+                        Deleted {timeAgo(new Date(p.deletedAt))}
+                      </div>
+                    </div>
+
+                    {/* Info */}
+                    <div className="p-3">
+                      <p className="text-sm font-semibold text-slate-700 truncate">{p.title}</p>
+                      <p className="text-xs text-slate-400 truncate mt-0.5">{p.district || p.city}</p>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="px-3 pb-3 flex gap-2">
+                      <button
+                        onClick={() => handleRestore(p.id)}
+                        className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-green-600 bg-green-50 hover:bg-green-100 border border-green-200 py-2 rounded-xl transition"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" /> Restore
+                      </button>
+                      <button
+                        onClick={() => handleDeletePermanent(p.id)}
+                        className="flex items-center justify-center w-9 h-9 text-red-400 hover:text-red-600 hover:bg-red-50 border border-slate-200 hover:border-red-200 rounded-xl transition"
+                        title="Delete permanently"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── Results ── */}
-        {pageLoading ? (
+        {!showBin && (pageLoading ? (
           <div className="flex items-center justify-center py-24">
             <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
           </div>
@@ -756,8 +914,16 @@ export default function PropertiesPage() {
               </div>
             )}
           </div>
-        )}
+        ))}
+
       </div>
+
+      {/* Bin toast */}
+      {binToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl shadow-xl text-sm font-medium text-white bg-slate-800 flex items-center gap-2">
+          <Archive className="w-4 h-4" /> {binToast}
+        </div>
+      )}
 
       {/* Instagram toast */}
       {igToast && (
@@ -886,7 +1052,7 @@ export default function PropertiesPage() {
                 disabled={importLoading || (!importUrl.trim() && !importText.trim())}
                 className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
               >
-                {importLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Extracting details...</> : <><Link2 className="w-4 h-4" /> Import Listing</>}
+                {importLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Extracting &amp; uploading photos…</> : <><Link2 className="w-4 h-4" /> Import Listing</>}
               </button>
             </div>
           </div>

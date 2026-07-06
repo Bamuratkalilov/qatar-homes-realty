@@ -72,6 +72,7 @@ model Property {
   status               PropertyStatus    @default(AVAILABLE)
   listingType          ListingType
   price                Float
+  rentFrequency        String?
   area                 Float
   bedrooms             Int?
   bathrooms            Int?
@@ -83,6 +84,7 @@ model Property {
   utilityBillsIncluded Boolean           @default(false)
   address              String
   district             String?
+  subDistrict          String?
   city                 String            @default("Doha")
   coordinates          Json?
   photos               String[]
@@ -96,6 +98,7 @@ model Property {
   appointments         Appointment[]
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
+  deletedAt            DateTime?
 }
 
 model Lead {
@@ -304,6 +307,7 @@ enum PropertyType {
   OFFICE
   PENTHOUSE
   RESTAURANT
+  SERVICED_APARTMENT
   SHOP
   SHOWROOM
   STUDIO

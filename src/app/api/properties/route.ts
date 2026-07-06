@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
       agentId = user.id
     }
 
-    const where: Record<string, unknown> = { agentId }
+    const where: Record<string, unknown> = { agentId, deletedAt: null }
     if (status)   where.status = status
     if (type)     where.type   = type
     if (maxPrice) where.price  = { lte: Number(maxPrice) }

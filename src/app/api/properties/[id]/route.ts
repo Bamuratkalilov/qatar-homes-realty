@@ -65,12 +65,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         listingType: body.listingType ?? "RENT",
         referenceNumber: body.referenceNumber?.trim() || undefined,
         price: Number(body.price) || 0,
+        rentFrequency: body.rentFrequency || null,
         area: Number(body.area) || 0,
         bedrooms: body.bedrooms ? Number(body.bedrooms) : null,
         bathrooms: body.bathrooms ? Number(body.bathrooms) : null,
         floor: body.floor ? Number(body.floor) : null,
         address: body.address?.trim() ?? "",
         district: body.district || null,
+        subDistrict: body.subDistrict || null,
         furnishing: body.furnishing || null,
         availabilityType: body.availabilityType ?? "IMMEDIATE",
         availableFrom: body.availableFrom ? new Date(body.availableFrom) : null,
@@ -90,11 +92,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { id } = await params
+  const permanent = new URL(req.url).searchParams.get("permanent") === "true"
+
   try {
     const agentId = await resolveAgentId(session.user.id, session.user.email!)
     if (!agentId) return NextResponse.json({ error: "Session expired" }, { status: 401 })
@@ -103,7 +107,11 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 })
     if (existing.agentId !== agentId) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    await db.property.delete({ where: { id } })
+    if (permanent) {
+      await db.property.delete({ where: { id } })
+    } else {
+      await db.property.update({ where: { id }, data: { deletedAt: new Date() } })
+    }
     return NextResponse.json({ ok: true })
   } catch (e) {
     console.error("DELETE /api/properties/[id] error:", e)

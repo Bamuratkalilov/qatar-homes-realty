@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select } from "@/components/ui/select"
-import { RESIDENTIAL_TYPES, COMMERCIAL_TYPES, QATAR_DISTRICTS, cn } from "@/lib/utils"
+import { RESIDENTIAL_TYPES, COMMERCIAL_TYPES, QATAR_LOCATIONS, cn } from "@/lib/utils"
 import {
-  Save, ArrowLeft, Globe, AlertCircle, MapPin, Wand2, RefreshCw, Loader2, ImageIcon,
+  Save, ArrowLeft, Globe, AlertCircle, MapPin, Wand2, RefreshCw, Loader2, ImageIcon, Copy, Check, Trash2,
 } from "lucide-react"
 import dynamic from "next/dynamic"
 import { PhotoManager } from "@/components/properties/photo-manager"
@@ -41,6 +41,9 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
   const [igLoading, setIgLoading] = useState(false)
   const [igStatus, setIgStatus] = useState<"idle" | "done" | "error">("idle")
   const [igMessage, setIgMessage] = useState("")
+  const [descCopied, setDescCopied] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   async function postToInstagram() {
     if (!photos.length) { setIgStatus("error"); setIgMessage("Add at least one photo first"); return }
@@ -80,6 +83,7 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
           floor: p.floor != null ? String(p.floor) : "",
           address: p.address ?? "",
           district: p.district ?? "",
+          subDistrict: p.subDistrict ?? "",
           description: p.description ?? "",
           rentFrequency: p.rentFrequency ?? "MONTHLY",
           furnishing: (p.furnishing as FormState["furnishing"]) ?? "",
@@ -141,8 +145,10 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
     if (!form.furnishing)                            errs.availability = "Select furnishing"
     if (photos.length < 3)                           errs.photos = `Add at least 3 photos (${photos.length}/3)`
     if (!form.title.trim())                          errs.titleDesc = "Title required"
+    else if (form.title.trim().length < 40)          errs.titleDesc = `Title too short (${form.title.trim().length}/40 min)`
+    else if (form.title.trim().length > 100)         errs.titleDesc = `Title too long (${form.title.trim().length}/100 max)`
     if (!form.description.trim())                    errs.titleDesc = (errs.titleDesc ? errs.titleDesc + " · " : "") + "Description required"
-    if (!form.address.trim())                        errs.location = "Address required"
+    if (!form.district.trim())                        errs.location = "Select an area"
 
     setFieldErrors(errs)
     if (Object.keys(errs).length > 0) {
@@ -177,7 +183,7 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
       })
       const data = await res.json()
       if (res.ok) {
-        router.push("/dashboard/properties")
+        router.back()
       } else {
         setError(data.error || "Something went wrong.")
       }
@@ -185,6 +191,17 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
       setError("Network error — check your connection and try again.")
     } finally {
       setLoading(null)
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true)
+    try {
+      await fetch(`/api/properties/${id}`, { method: "DELETE" })
+      router.back()
+    } catch {
+      setDeleting(false)
+      setShowDeleteConfirm(false)
     }
   }
 
@@ -203,6 +220,16 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
         description={form.title || "Update your listing"}
         actions={
           <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+              onClick={() => setShowDeleteConfirm(true)}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete
+            </Button>
             <Button type="button" variant="outline" size="sm" disabled={loading !== null} onClick={() => submit("OFF_MARKET")} className="gap-1.5">
               <Save className="w-3.5 h-3.5" />
               {loading === "save" ? "Saving…" : "Save Changes"}
@@ -211,7 +238,7 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
               <Globe className="w-3.5 h-3.5" />
               {loading === "publish" ? "Publishing…" : "Publish Listing"}
             </Button>
-            <Button variant="outline" size="sm" className="gap-2" onClick={() => router.push("/dashboard/properties")}>
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => router.back()}>
               <ArrowLeft className="w-4 h-4" /> Back
             </Button>
           </div>
@@ -384,16 +411,52 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
               <div data-section-error={fieldErrors.titleDesc ? true : undefined}>
               <SectionCard title="Title & Description" error={fieldErrors.titleDesc}>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Property Title *</label>
-                  <Input value={form.title} onChange={(e) => update("title", e.target.value)} placeholder="e.g. Luxury 3BR Apartment with Sea View in The Pearl" className="text-base" />
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-sm font-medium text-slate-700">Property Title *</label>
+                    <span className={`text-xs font-medium ${
+                      form.title.length === 0 ? "text-slate-400"
+                      : form.title.length < 40 ? "text-amber-500"
+                      : form.title.length > 100 ? "text-red-500"
+                      : "text-green-600"
+                    }`}>
+                      {form.title.length}/100
+                    </span>
+                  </div>
+                  <Input
+                    value={form.title}
+                    onChange={(e) => update("title", e.target.value.slice(0, 100))}
+                    placeholder="e.g. Luxury 3BR Apartment with Sea View in The Pearl"
+                    className="text-base"
+                  />
+                  {form.title.length > 0 && form.title.length < 40 && (
+                    <p className="text-xs text-amber-500 mt-1">{40 - form.title.length} more characters needed</p>
+                  )}
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-sm font-medium text-slate-700">Description</label>
-                    <Button type="button" variant="outline" size="sm" onClick={generateDescription} disabled={aiLoading} className="gap-2">
-                      <Wand2 className="w-3.5 h-3.5" />
-                      {aiLoading ? "Generating..." : "AI Generate"}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      {form.description && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          onClick={() => {
+                            navigator.clipboard.writeText(form.description)
+                            setDescCopied(true)
+                            setTimeout(() => setDescCopied(false), 2000)
+                          }}
+                        >
+                          {descCopied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          {descCopied ? "Copied!" : "Copy"}
+                        </Button>
+                      )}
+                      <Button type="button" variant="outline" size="sm" onClick={generateDescription} disabled={aiLoading} className="gap-2">
+                        <Wand2 className="w-3.5 h-3.5" />
+                        {aiLoading ? "Generating..." : "AI Generate"}
+                      </Button>
+                    </div>
                   </div>
                   <Textarea value={form.description} onChange={(e) => update("description", e.target.value)} placeholder="Describe the property…" rows={6} />
                 </div>
@@ -418,26 +481,57 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
                     {coordinates ? (
                       <>
                         <p className="text-sm font-semibold text-blue-700">Location pinned on map</p>
-                        <p className="text-xs text-slate-500 truncate">{form.address || `${coordinates.lat.toFixed(5)}, ${coordinates.lng.toFixed(5)}`}</p>
+                        <p className="text-xs text-slate-500">{coordinates.lat.toFixed(5)}, {coordinates.lng.toFixed(5)}</p>
                       </>
                     ) : (
                       <>
-                        <p className="text-sm font-semibold text-slate-700">Pick location on map</p>
-                        <p className="text-xs text-slate-400">Click to open Mapbox and pin the exact location</p>
+                        <p className="text-sm font-semibold text-slate-700">Pin on map (optional)</p>
+                        <p className="text-xs text-slate-400">Click to open Mapbox and set exact coordinates</p>
                       </>
                     )}
                   </div>
                   <span className="text-xs font-semibold text-blue-600 flex-shrink-0">{coordinates ? "Change" : "Open Map →"}</span>
                 </button>
 
+                {/* Main area */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Address</label>
-                  <Input value={form.address} onChange={(e) => update("address", e.target.value)} placeholder="e.g. Porto Arabia, The Pearl-Qatar" />
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Area *</label>
+                  <select
+                    value={form.district}
+                    onChange={(e) => {
+                      update("district", e.target.value)
+                      update("subDistrict", "")
+                    }}
+                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">Select area…</option>
+                    {QATAR_LOCATIONS.map((l) => (
+                      <option key={l.area} value={l.area}>{l.area}</option>
+                    ))}
+                  </select>
                 </div>
+
+                {/* Sub-area */}
+                {form.district && (QATAR_LOCATIONS.find((l) => l.area === form.district)?.subAreas.length ?? 0) > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Sub Area</label>
+                    <select
+                      value={form.subDistrict}
+                      onChange={(e) => update("subDistrict", e.target.value)}
+                      className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Select sub area…</option>
+                      {QATAR_LOCATIONS.find((l) => l.area === form.district)?.subAreas.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Optional building / street */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">District</label>
-                  <Select value={form.district} onChange={(e) => update("district", e.target.value)} placeholder="Select district"
-                    options={QATAR_DISTRICTS.map((d) => ({ value: d, label: d }))} />
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Building / Street <span className="text-slate-400 font-normal">(optional)</span></label>
+                  <Input value={form.address} onChange={(e) => update("address", e.target.value)} placeholder="e.g. Tower B, Floor 12" />
                 </div>
               </SectionCard>
               </div>
@@ -449,12 +543,14 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
                   initialLng={coordinates?.lng}
                   onSelect={(loc) => {
                     setCoordinates({ lat: loc.latitude, lng: loc.longitude })
-                    update("address", loc.address)
-                    const matched = QATAR_DISTRICTS.find((d) =>
-                      d.toLowerCase().includes(loc.district.toLowerCase()) ||
-                      loc.district.toLowerCase().includes(d.toLowerCase())
+                    const matched = QATAR_LOCATIONS.find((l) =>
+                      l.area.toLowerCase().includes(loc.district.toLowerCase()) ||
+                      loc.district.toLowerCase().includes(l.area.toLowerCase())
                     )
-                    if (matched) update("district", matched)
+                    if (matched) {
+                      update("district", matched.area)
+                      update("subDistrict", "")
+                    }
                     setShowMap(false)
                   }}
                 />
@@ -509,7 +605,7 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
                     </p>
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
-                    <Button type="button" variant="outline" size="sm" onClick={() => router.push("/dashboard/properties")}>Cancel</Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => router.back()}>Cancel</Button>
                     <Button type="button" variant="outline" disabled={loading !== null} onClick={() => submit("OFF_MARKET")} className="gap-2">
                       <Save className="w-4 h-4" />
                       {loading === "save" ? "Saving…" : "Save Changes"}
@@ -540,6 +636,43 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
           </div>
         </form>
       </div>
+
+      {/* Delete confirmation modal */}
+      {showDeleteConfirm && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+          onClick={() => !deleting && setShowDeleteConfirm(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-5 h-5 text-red-600" />
+            </div>
+            <h2 className="text-lg font-bold text-slate-900 text-center mb-1">Move to bin?</h2>
+            <p className="text-sm text-slate-500 text-center mb-6">
+              <span className="font-medium text-slate-700">{form.title || "This listing"}</span> will be moved to the bin. You can restore it later from the Properties page.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {deleting ? <><Loader2 className="w-4 h-4 animate-spin" /> Moving…</> : "Move to Bin"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
