@@ -1,7 +1,6 @@
 "use client"
 
 import { useCallback, useState, useRef, useEffect } from "react"
-import Image from "next/image"
 import {
   DndContext,
   closestCenter,
@@ -22,6 +21,14 @@ import { CSS } from "@dnd-kit/utilities"
 import { Upload, X, GripVertical, Star, ImageIcon, Loader2, Sliders, Check, Sparkles, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+
+// Proxy external CDN images through our server to bypass hotlink protection
+function imgSrc(url: string): string {
+  if (!url) return url
+  if (url.startsWith("blob:") || url.startsWith("data:") || url.startsWith("/")) return url
+  if (url.startsWith("https://res.cloudinary.com")) return url
+  return `/api/proxy-image?url=${encodeURIComponent(url)}`
+}
 
 // ── Image compression ──────────────────────────────────────────────────────
 async function compressImage(file: File, maxPx = 1920, quality = 0.82): Promise<File> {
@@ -125,7 +132,7 @@ function PhotoEditor({ url, onSave, onClose }: PhotoEditorProps) {
     const img = new window.Image()
     img.crossOrigin = "anonymous"
     img.onload = () => { imgRef.current = img }
-    img.src = url
+    img.src = imgSrc(url)
   }, [url])
 
   async function applyAndSave() {
@@ -240,7 +247,7 @@ function PhotoEditor({ url, onSave, onClose }: PhotoEditorProps) {
             <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-slate-100">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={url}
+                src={imgSrc(url)}
                 alt="preview"
                 className="w-full h-full object-cover"
                 style={{ filter: buildFilter(adj) }}
@@ -261,7 +268,7 @@ function PhotoEditor({ url, onSave, onClose }: PhotoEditorProps) {
                   )}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={url} alt={p.name} className="w-full aspect-square object-cover" style={{ filter: buildFilter(p.adj) }} />
+                  <img src={imgSrc(url)} alt={p.name} className="w-full aspect-square object-cover" style={{ filter: buildFilter(p.adj) }} />
                   <div className="absolute bottom-0 inset-x-0 bg-black/50 text-white text-[10px] font-medium py-0.5 text-center">
                     {p.name}
                   </div>
@@ -342,7 +349,8 @@ function SortableTile({ url, index, originalSize, compressedSize, isDragging, on
         index === 0 ? "border-blue-500" : "border-slate-200",
         isDragging ? "shadow-2xl scale-105" : ""
       )}>
-        <Image src={url} alt={`Photo ${index + 1}`} fill className="object-cover" sizes="200px" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={imgSrc(url)} alt={`Photo ${index + 1}`} className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all" />
 
         {/* Drag handle */}
@@ -629,7 +637,8 @@ export function PhotoManager({ photos, onChange }: PhotoManagerProps) {
             <DragOverlay>
               {activeDragUrl && (
                 <div className="w-24 h-24 rounded-xl overflow-hidden shadow-2xl rotate-2 border-2 border-blue-500">
-                  <Image src={activeDragUrl} alt="dragging" fill className="object-cover" sizes="96px" />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={imgSrc(activeDragUrl)} alt="dragging" className="w-full h-full object-cover" />
                 </div>
               )}
             </DragOverlay>
