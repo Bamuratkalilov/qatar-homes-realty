@@ -24,10 +24,7 @@ import { Button } from "@/components/ui/button"
 
 // Proxy external CDN images through our server to bypass hotlink protection
 function imgSrc(url: string): string {
-  if (!url) return url
-  if (url.startsWith("blob:") || url.startsWith("data:") || url.startsWith("/")) return url
-  if (url.startsWith("https://res.cloudinary.com")) return url
-  return `/api/proxy-image?url=${encodeURIComponent(url)}`
+  return url || ""
 }
 
 // ── Image compression ──────────────────────────────────────────────────────
@@ -130,9 +127,10 @@ function PhotoEditor({ url, onSave, onClose }: PhotoEditorProps) {
 
   useEffect(() => {
     const img = new window.Image()
-    img.crossOrigin = "anonymous"
+    // crossOrigin only for Cloudinary (which supports CORS); skip for external CDNs
+    if (url.startsWith("https://res.cloudinary.com")) img.crossOrigin = "anonymous"
     img.onload = () => { imgRef.current = img }
-    img.src = imgSrc(url)
+    img.src = url
   }, [url])
 
   async function applyAndSave() {
