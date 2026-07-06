@@ -93,7 +93,18 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
         })
         setAmenities(p.amenities ?? [])
         setUtilities([])
-        setPhotos(p.photos ?? [])
+        const loadedPhotos: string[] = p.photos ?? []
+        setPhotos(loadedPhotos)
+
+        // Auto-fix: if any photos are not on Cloudinary, silently re-upload them
+        const hasExternal = loadedPhotos.some(u => !u.startsWith("https://res.cloudinary.com"))
+        if (hasExternal) {
+          fetch(`/api/properties/${p.id}/fix-photos`, { method: "POST" })
+            .then(r => r.json())
+            .then(data => { if (data.photos) setPhotos(data.photos) })
+            .catch(() => {/* ignore — photos stay as-is */})
+        }
+
         if (p.coordinates && typeof p.coordinates === "object") {
           const c = p.coordinates as { lat?: number; lng?: number }
           if (c.lat && c.lng) setCoordinates({ lat: c.lat, lng: c.lng })
