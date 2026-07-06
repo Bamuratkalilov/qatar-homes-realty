@@ -22,9 +22,11 @@ import { Upload, X, GripVertical, Star, ImageIcon, Loader2, Sliders, Check, Spar
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
-// Proxy external CDN images through our server to bypass hotlink protection
+// Non-Cloudinary URLs go through our proxy so the browser always gets the image
 function imgSrc(url: string): string {
-  return url || ""
+  if (!url) return ""
+  if (url.startsWith("https://res.cloudinary.com")) return url
+  return `/api/proxy-image?url=${encodeURIComponent(url)}`
 }
 
 // ── Image compression ──────────────────────────────────────────────────────
@@ -348,7 +350,7 @@ function SortableTile({ url, index, originalSize, compressedSize, isDragging, on
         isDragging ? "shadow-2xl scale-105" : ""
       )}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={imgSrc(url)} alt={`Photo ${index + 1}`} className="w-full h-full object-cover" />
+        <img src={imgSrc(url)} alt={`Photo ${index + 1}`} className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all" />
 
         {/* Drag handle */}
