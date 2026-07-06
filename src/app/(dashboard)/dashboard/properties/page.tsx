@@ -386,6 +386,9 @@ export default function PropertiesPage() {
   const [binProperties, setBinProperties] = useState<BinProperty[]>([])
   const [binLoading, setBinLoading] = useState(false)
   const [binToast, setBinToast] = useState<string | null>(null)
+  const [showEmptyBinModal, setShowEmptyBinModal] = useState(false)
+  const [emptyBinPassword, setEmptyBinPassword] = useState("")
+  const [emptyBinError, setEmptyBinError] = useState("")
 
   async function loadBin() {
     setBinLoading(true)
@@ -429,9 +432,15 @@ export default function PropertiesPage() {
   }
 
   async function handleEmptyBin() {
-    if (!confirm(`Permanently delete all ${binProperties.length} items in bin? This cannot be undone.`)) return
+    if (emptyBinPassword !== "123") {
+      setEmptyBinError("Wrong password")
+      return
+    }
     await fetch("/api/properties/bin", { method: "DELETE" })
     setBinProperties([])
+    setShowEmptyBinModal(false)
+    setEmptyBinPassword("")
+    setEmptyBinError("")
   }
 
   async function handleInstagramPost(p: Property) {
@@ -718,7 +727,7 @@ export default function PropertiesPage() {
               </div>
               {binProperties.length > 0 && (
                 <button
-                  onClick={handleEmptyBin}
+                  onClick={() => { setShowEmptyBinModal(true); setEmptyBinPassword(""); setEmptyBinError("") }}
                   className="flex items-center gap-1.5 text-xs font-semibold text-red-500 hover:text-red-700 px-3 py-2 rounded-lg hover:bg-red-50 transition border border-red-200"
                 >
                   <Trash2 className="w-3.5 h-3.5" /> Empty Bin
@@ -917,6 +926,46 @@ export default function PropertiesPage() {
         ))}
 
       </div>
+
+      {/* Empty Bin password modal */}
+      {showEmptyBinModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setShowEmptyBinModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-5 h-5 text-red-600" />
+            </div>
+            <h2 className="text-lg font-bold text-slate-900 text-center mb-1">Empty Bin</h2>
+            <p className="text-sm text-slate-500 text-center mb-5">
+              This will permanently delete all <span className="font-semibold text-slate-700">{binProperties.length} items</span>. Enter your password to confirm.
+            </p>
+            <input
+              type="password"
+              value={emptyBinPassword}
+              onChange={(e) => { setEmptyBinPassword(e.target.value); setEmptyBinError("") }}
+              onKeyDown={(e) => e.key === "Enter" && handleEmptyBin()}
+              placeholder="Password"
+              autoFocus
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-400 mb-1"
+            />
+            {emptyBinError && <p className="text-xs text-red-500 mb-3">{emptyBinError}</p>}
+            {!emptyBinError && <div className="mb-3" />}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowEmptyBinModal(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEmptyBin}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition"
+              >
+                Delete All
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bin toast */}
       {binToast && (
