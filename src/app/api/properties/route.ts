@@ -7,13 +7,20 @@ export async function GET(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { searchParams } = new URL(req.url)
-  const agentId  = session.user.id
   const status   = searchParams.get("status")
   const type     = searchParams.get("type")       // property type e.g. APARTMENT
   const maxPrice = searchParams.get("maxPrice")
   const bedrooms = searchParams.get("bedrooms")
 
   try {
+    // Resolve agent ID — same fallback logic as POST (handles stale JWT / demo session)
+    let agentId = session.user.id
+    if (agentId === "demo-agent" || !(await db.user.findUnique({ where: { id: agentId }, select: { id: true } }))) {
+      const user = await db.user.findUnique({ where: { email: session.user.email! }, select: { id: true } })
+      if (!user) return NextResponse.json({ error: "Session expired — please sign out and sign in again." }, { status: 401 })
+      agentId = user.id
+    }
+
     const where: Record<string, unknown> = { agentId }
     if (status)   where.status = status
     if (type)     where.type   = type
@@ -64,12 +71,14 @@ export async function POST(req: NextRequest) {
         referenceNumber: body.referenceNumber?.trim() || undefined,
         // Use 0 as placeholder for draft saves with missing price/area
         price: Number(body.price) || 0,
+        rentFrequency: body.rentFrequency || null,
         area: Number(body.area) || 0,
         bedrooms: body.bedrooms ? Number(body.bedrooms) : undefined,
         bathrooms: body.bathrooms ? Number(body.bathrooms) : undefined,
         floor: body.floor ? Number(body.floor) : undefined,
         address: body.address?.trim() || "",
         district: body.district || undefined,
+        subDistrict: body.subDistrict || undefined,
         furnishing: body.furnishing || undefined,
         availabilityType: body.availabilityType || "IMMEDIATE",
         availableFrom: body.availableFrom ? new Date(body.availableFrom) : undefined,
