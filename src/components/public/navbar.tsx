@@ -46,8 +46,8 @@ const NAV_ITEMS = [
     href: "/discover",
   },
   {
-    label: "News",
-    href: "/news",
+    label: "Blog",
+    href: "/blog",
   },
 ] as const
 
