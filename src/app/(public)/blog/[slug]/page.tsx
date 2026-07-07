@@ -119,7 +119,7 @@ export default async function BlogArticlePage({ params }: { params: Promise<{ sl
 
       {/* ── Main content: 2-col (article + sidebar) ─────────────────────────── */}
       <div className="max-w-6xl mx-auto px-5 sm:px-8 py-12">
-        <div className="grid lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-12 lg:gap-14 items-start">
+        <div className="grid lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-12 lg:gap-14 items-stretch">
 
           {/* ── Left: Article body ──────────────────────────────────────────── */}
           <div className="min-w-0 space-y-14">
